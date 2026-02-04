@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { Player } from "@remotion/player";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -14,13 +13,12 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
-import { EnhancedGeometric } from "@/remotion/compositions/EnhancedGeometric";
-import { AsciiAnimation } from "@/remotion/compositions/AsciiAnimation";
-import { WaveField } from "@/remotion/compositions/WaveField";
-import { TunnelZoom } from "@/remotion/compositions/TunnelZoom";
-import { ShaderPattern } from "@/remotion/compositions/ShaderPattern";
+// Direct canvas components for 60fps performance
 import { ShaderCanvas } from "@/components/ShaderCanvas";
-import { defaultRainbowConfig } from "@/remotion/utils/colors";
+import { TunnelCanvas } from "@/components/TunnelCanvas";
+import { WaveCanvas } from "@/components/WaveCanvas";
+import { GeometricCanvas } from "@/components/GeometricCanvas";
+import { AsciiCanvas } from "@/components/AsciiCanvas";
 
 // Reusable slider with input component
 interface SliderWithInputProps {
@@ -138,7 +136,6 @@ export default function Home() {
 
   // Shared
   const [seed, setSeed] = useState(42);
-  const [duration] = useState(10);
   const [enableNoise, setEnableNoise] = useState(true);
   const [enableVignette, setEnableVignette] = useState(true);
 
@@ -203,16 +200,6 @@ export default function Home() {
   const [saturation, setSaturation] = useState(80);
   const [lightness, setLightness] = useState(60);
 
-  const rainbowConfig = useMemo(() => ({
-    ...defaultRainbowConfig,
-    hueStart,
-    hueEnd,
-    saturation,
-    lightness,
-    animate: true,
-    speed: 1,
-  }), [hueStart, hueEnd, saturation, lightness]);
-
   const randomize = () => {
     setSeed(Math.floor(Math.random() * 10000));
 
@@ -263,163 +250,75 @@ export default function Home() {
     setHueEnd(Math.floor(Math.random() * 360));
   };
 
-  const asciiProps = useMemo(() => ({
-    pattern: asciiPattern as any,
-    backgroundColor: "#000000",
-    textColor: asciiColorMode === "single" ? asciiColor : "#00ff00",
-    colorMode: asciiColorMode as any,
-    rainbowConfig,
-    speed: asciiSpeed,
-    density: asciiDensity,
-    enableNoise,
-    enableVignette,
-    seed,
-    rotationX,
-    rotationY,
-    rotationZ,
-    autoRotate,
-    autoRotateSpeedX,
-    autoRotateSpeedY,
-    autoRotateSpeedZ,
-  }), [asciiPattern, asciiSpeed, asciiDensity, asciiColorMode, asciiColor, rainbowConfig, enableNoise, enableVignette, seed, rotationX, rotationY, rotationZ, autoRotate, autoRotateSpeedX, autoRotateSpeedY, autoRotateSpeedZ]);
-
-  const waveProps = useMemo(() => ({
-    backgroundColor: "#000000",
-    lineColor: waveColorMode === "single" ? waveColor : "#ffffff",
-    pattern: wavePattern as any,
-    lineCount,
-    segmentsPerLine: 100,
-    amplitude: waveAmplitude,
-    frequency: waveFrequency,
-    speed: waveSpeed,
-    perspective: wavePerspective,
-    rotationSpeed: 0.5,
-    enableNoise,
-    enableVignette,
-    seed,
-    colorMode: waveColorMode as any,
-    rainbowConfig,
-  }), [wavePattern, lineCount, waveAmplitude, waveFrequency, waveSpeed, wavePerspective, waveColorMode, waveColor, rainbowConfig, enableNoise, enableVignette, seed]);
-
-  const tunnelProps = useMemo(() => ({
-    backgroundColor: "#000000",
-    primaryColor: "#ffffff",
-    pattern: tunnelPatternType as any,
-    shapeType: tunnelShape as any,
-    layerCount,
-    colorMode: "rainbow" as const,
-    rainbowConfig,
-    gradientColors: ["#ff0066", "#6600ff", "#00ff66"],
-    zoomSpeed,
-    zoomDirection: zoomDirection as any,
-    enableMeshGradient: false,
-    meshColors: ["#ff0066", "#6600ff", "#00ff66"],
-    enableGlow,
-    glowIntensity,
-    strokeWidth: 3,
-    enableNoise,
-    enableVignette,
-    rotationSpeed: tunnelRotation,
-    seed,
-  }), [tunnelShape, tunnelPatternType, zoomSpeed, zoomDirection, layerCount, tunnelRotation, enableGlow, glowIntensity, rainbowConfig, enableNoise, enableVignette, seed]);
-
-  const geometricProps = useMemo(() => ({
-    backgroundColor: bgColor,
-    primaryColor,
-    accentColor,
-    shape: geoShape as any,
-    shapeCount,
-    mixShapes: false,
-    enableNoise,
-    enableScanlines: true,
-    enableParticles: true,
-    enableVignette,
-    enableGlitch: false,
-    enableDither: true,
-    ditherPattern: "bayer" as const,
-    enableBloom: true,
-    enableChromaticAberration: false,
-    enableMirror: false,
-    enableTrails: false,
-    motionPattern: motionPattern as any,
-    motionSpeed,
-    motionIntensity: 1,
-    seed,
-  }), [geoShape, shapeCount, motionPattern, motionSpeed, primaryColor, accentColor, bgColor, enableNoise, enableVignette, seed]);
-
-  const shaderProps = useMemo(() => ({
-    pattern: shaderPattern as any,
-    speed: shaderSpeed,
-    complexity: shaderComplexity,
-    colorA: shaderColorA,
-    colorB: shaderColorB,
-    colorC: shaderColorC,
-    symmetry: shaderSymmetry,
-    zoom: shaderZoom,
-    rotation: shaderRotation,
-    enableNoise,
-    seed,
-  }), [shaderPattern, shaderSpeed, shaderComplexity, shaderColorA, shaderColorB, shaderColorC, shaderSymmetry, shaderZoom, shaderRotation, enableNoise, seed]);
-
   return (
     <div className="h-screen w-screen bg-neutral-950 flex flex-col overflow-hidden">
       {/* Video Player */}
       <div className="flex-1 relative min-h-0">
         <div className="absolute inset-0">
           {type === "ascii" && (
-            <Player
-              component={AsciiAnimation}
-              inputProps={asciiProps}
-              durationInFrames={duration * 30}
-              fps={30}
-              compositionWidth={1920}
-              compositionHeight={1080}
-              style={{ width: "100%", height: "100%" }}
-              controls={false}
-              loop
-              autoPlay
+            <AsciiCanvas
+              pattern={asciiPattern as any}
+              speed={asciiSpeed}
+              density={asciiDensity}
+              colorMode={asciiColorMode as any}
+              textColor={asciiColor}
+              hueStart={hueStart}
+              hueEnd={hueEnd}
+              saturation={saturation}
+              lightness={lightness}
+              rotationX={rotationX}
+              rotationY={rotationY}
+              rotationZ={rotationZ}
+              autoRotate={autoRotate}
+              autoRotateSpeedX={autoRotateSpeedX}
+              autoRotateSpeedY={autoRotateSpeedY}
+              autoRotateSpeedZ={autoRotateSpeedZ}
             />
           )}
           {type === "wavefield" && (
-            <Player
-              component={WaveField}
-              inputProps={waveProps}
-              durationInFrames={duration * 30}
-              fps={30}
-              compositionWidth={1920}
-              compositionHeight={1080}
-              style={{ width: "100%", height: "100%" }}
-              controls={false}
-              loop
-              autoPlay
+            <WaveCanvas
+              pattern={wavePattern as any}
+              lineCount={lineCount}
+              amplitude={waveAmplitude}
+              frequency={waveFrequency}
+              speed={waveSpeed}
+              perspective={wavePerspective}
+              colorMode={waveColorMode as any}
+              lineColor={waveColor}
+              hueStart={hueStart}
+              hueEnd={hueEnd}
+              saturation={saturation}
+              lightness={lightness}
             />
           )}
           {type === "tunnel" && (
-            <Player
-              component={TunnelZoom}
-              inputProps={tunnelProps}
-              durationInFrames={duration * 30}
-              fps={30}
-              compositionWidth={1920}
-              compositionHeight={1080}
-              style={{ width: "100%", height: "100%" }}
-              controls={false}
-              loop
-              autoPlay
+            <TunnelCanvas
+              shape={tunnelShape as any}
+              pattern={tunnelPatternType as any}
+              layerCount={layerCount}
+              zoomSpeed={zoomSpeed}
+              zoomDirection={zoomDirection as any}
+              rotationSpeed={tunnelRotation}
+              enableGlow={enableGlow}
+              glowIntensity={glowIntensity}
+              hueStart={hueStart}
+              hueEnd={hueEnd}
+              saturation={saturation}
+              lightness={lightness}
             />
           )}
           {type === "geometric" && (
-            <Player
-              component={EnhancedGeometric}
-              inputProps={geometricProps}
-              durationInFrames={duration * 30}
-              fps={30}
-              compositionWidth={1920}
-              compositionHeight={1080}
-              style={{ width: "100%", height: "100%" }}
-              controls={false}
-              loop
-              autoPlay
+            <GeometricCanvas
+              shape={geoShape as any}
+              shapeCount={shapeCount}
+              motionPattern={motionPattern as any}
+              motionSpeed={motionSpeed}
+              primaryColor={primaryColor}
+              accentColor={accentColor}
+              backgroundColor={bgColor}
+              enableNoise={enableNoise}
+              enableVignette={enableVignette}
+              seed={seed}
             />
           )}
           {type === "shader" && (
