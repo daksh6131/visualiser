@@ -3,7 +3,6 @@ import {
   AbsoluteFill,
   useCurrentFrame,
   useVideoConfig,
-  interpolate,
 } from "remotion";
 import { Noise, Vignette } from "../components/effects";
 import { getRainbowColor, RainbowConfig, defaultRainbowConfig } from "../utils/colors";
@@ -31,6 +30,14 @@ interface AsciiAnimationProps {
   enableNoise: boolean;
   enableVignette: boolean;
   seed: number;
+  // 3D rotation controls
+  rotationX?: number; // -180 to 180 degrees
+  rotationY?: number; // -180 to 180 degrees
+  rotationZ?: number; // -180 to 180 degrees
+  autoRotate?: boolean; // Enable auto rotation
+  autoRotateSpeedX?: number;
+  autoRotateSpeedY?: number;
+  autoRotateSpeedZ?: number;
 }
 
 // ASCII density characters from light to dark
@@ -46,6 +53,9 @@ const seededRandom = (seed: number): number => {
   return x - Math.floor(x);
 };
 
+// Convert degrees to radians
+const degToRad = (deg: number): number => (deg * Math.PI) / 180;
+
 export const AsciiAnimation: React.FC<AsciiAnimationProps> = ({
   pattern = "donut",
   backgroundColor = "#000000",
@@ -57,11 +67,29 @@ export const AsciiAnimation: React.FC<AsciiAnimationProps> = ({
   enableNoise = true,
   enableVignette = true,
   seed = 42,
+  rotationX = 0,
+  rotationY = 0,
+  rotationZ = 0,
+  autoRotate = true,
+  autoRotateSpeedX = 1,
+  autoRotateSpeedY = 0.8,
+  autoRotateSpeedZ = 0.5,
 }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
 
   const time = (frame / fps) * speed;
+
+  // Calculate actual rotation angles (manual + auto)
+  const actualRotX = autoRotate
+    ? degToRad(rotationX) + time * autoRotateSpeedX
+    : degToRad(rotationX);
+  const actualRotY = autoRotate
+    ? degToRad(rotationY) + time * autoRotateSpeedY
+    : degToRad(rotationY);
+  const actualRotZ = autoRotate
+    ? degToRad(rotationZ) + time * autoRotateSpeedZ
+    : degToRad(rotationZ);
 
   // Grid dimensions based on density
   const baseCols = 80;
@@ -116,9 +144,9 @@ export const AsciiAnimation: React.FC<AsciiAnimationProps> = ({
       }
 
       case "donut": {
-        // 3D rotating donut/torus
-        const A = time * 1.5;
-        const B = time * 0.8;
+        // 3D rotating donut/torus with controllable rotation
+        const A = actualRotX;
+        const B = actualRotY;
 
         // Z-buffer and luminance buffer
         const zBuffer: number[][] = [];
@@ -187,10 +215,10 @@ export const AsciiAnimation: React.FC<AsciiAnimationProps> = ({
       }
 
       case "cube": {
-        // 3D rotating cube
-        const rotX = time * 1.2;
-        const rotY = time * 0.9;
-        const rotZ = time * 0.5;
+        // 3D rotating cube with controllable rotation
+        const rotX = actualRotX;
+        const rotY = actualRotY;
+        const rotZ = actualRotZ;
 
         // Cube vertices
         const vertices = [
@@ -375,9 +403,9 @@ export const AsciiAnimation: React.FC<AsciiAnimationProps> = ({
             z += Math.sin(Math.sqrt(x * x + y * y) * 3 - time * 4) * 0.5;
 
             // Simple lighting
-            const dx = Math.cos(x * 2 + time * 3) * 2 * Math.cos(y * 2 + time * 2);
-            const dy = Math.sin(x * 2 + time * 3) * (-Math.sin(y * 2 + time * 2) * 2);
-            const light = (dx + dy + 2) / 4;
+            const dxVal = Math.cos(x * 2 + time * 3) * 2 * Math.cos(y * 2 + time * 2);
+            const dyVal = Math.sin(x * 2 + time * 3) * (-Math.sin(y * 2 + time * 2) * 2);
+            const light = (dxVal + dyVal + 2) / 4;
 
             const brightness = Math.max(0, Math.min(1, (z + 1.5) / 3 * light));
             const charIndex = Math.floor(brightness * (ASCII_GRADIENT_LONG.length - 1));
@@ -395,37 +423,43 @@ export const AsciiAnimation: React.FC<AsciiAnimationProps> = ({
       }
 
       case "sphere": {
-        // 3D rotating sphere
-        const rotY = time * 1.5;
+        // 3D rotating sphere with controllable rotation
+        const rotY = actualRotY;
+        const rotX = actualRotX;
 
         for (let row = 0; row < rows; row++) {
           const gridRow: { char: string; brightness: number; colorIndex: number }[] = [];
           for (let col = 0; col < cols; col++) {
-            const x = (col - cols / 2) / (cols / 4);
-            const y = (row - rows / 2) / (rows / 4) * 2;
+            const px = (col - cols / 2) / (cols / 4);
+            const py = (row - rows / 2) / (rows / 4) * 2;
 
-            const r2 = x * x + y * y;
+            const r2 = px * px + py * py;
             let char = " ";
             let brightness = 0;
 
             if (r2 <= 1) {
               // Point is on sphere surface
-              const z = Math.sqrt(1 - r2);
+              const pz = Math.sqrt(1 - r2);
 
-              // Rotate around Y axis
-              const rotX = x * Math.cos(rotY) + z * Math.sin(rotY);
-              const rotZ = -x * Math.sin(rotY) + z * Math.cos(rotY);
+              // Apply X rotation first
+              let x1 = px;
+              let y1 = py * Math.cos(rotX) - pz * Math.sin(rotX);
+              let z1 = py * Math.sin(rotX) + pz * Math.cos(rotX);
+
+              // Then Y rotation
+              const finalX = x1 * Math.cos(rotY) + z1 * Math.sin(rotY);
+              const finalY = y1;
+              const finalZ = -x1 * Math.sin(rotY) + z1 * Math.cos(rotY);
 
               // Checker pattern on sphere
-              const u = Math.atan2(rotX, rotZ) / Math.PI;
-              const v = Math.asin(y) / (Math.PI / 2);
+              const u = Math.atan2(finalX, finalZ) / Math.PI;
+              const v = Math.asin(Math.max(-1, Math.min(1, finalY))) / (Math.PI / 2);
               const checker = (Math.floor(u * 8) + Math.floor(v * 8)) % 2;
 
               // Lighting (simple diffuse)
               const lightDir = [0.5, -0.5, 0.7];
               const mag = Math.sqrt(lightDir[0]**2 + lightDir[1]**2 + lightDir[2]**2);
-              const nx = rotX, ny = y, nz = rotZ;
-              const light = Math.max(0, (nx * lightDir[0] + ny * lightDir[1] + nz * lightDir[2]) / mag);
+              const light = Math.max(0, (finalX * lightDir[0] + finalY * lightDir[1] + finalZ * lightDir[2]) / mag);
 
               brightness = (light * 0.7 + 0.3) * (checker ? 1 : 0.5);
               const charIndex = Math.floor(brightness * (ASCII_GRADIENT.length - 1));
@@ -480,10 +514,10 @@ export const AsciiAnimation: React.FC<AsciiAnimationProps> = ({
     }
 
     return grid;
-  }, [pattern, cols, rows, time, seed]);
+  }, [pattern, cols, rows, time, seed, actualRotX, actualRotY, actualRotZ]);
 
   // Get color for a cell
-  const getCellColor = (brightness: number, colorIndex: number, row: number, col: number): string => {
+  const getCellColor = (brightness: number, colorIndex: number): string => {
     if (colorMode === "green") {
       // Matrix green
       const green = Math.floor(100 + brightness * 155);
@@ -529,7 +563,7 @@ export const AsciiAnimation: React.FC<AsciiAnimationProps> = ({
                   height: `${charHeight}px`,
                   display: "inline-block",
                   textAlign: "center",
-                  color: getCellColor(cell.brightness, cell.colorIndex, rowIndex, colIndex),
+                  color: getCellColor(cell.brightness, cell.colorIndex),
                   opacity: Math.max(0.1, cell.brightness),
                   textShadow: cell.brightness > 0.7 && colorMode === "green"
                     ? `0 0 10px rgba(0, 255, 0, ${cell.brightness * 0.5})`
