@@ -20,6 +20,44 @@ import { WaveField } from "@/remotion/compositions/WaveField";
 import { TunnelZoom } from "@/remotion/compositions/TunnelZoom";
 import { defaultRainbowConfig } from "@/remotion/utils/colors";
 
+// Reusable slider with input component
+interface SliderWithInputProps {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+  min: number;
+  max: number;
+  step: number;
+  decimals?: number;
+}
+
+const SliderWithInput = ({ label, value, onChange, min, max, step, decimals = 1 }: SliderWithInputProps) => (
+  <div className="space-y-2">
+    <div className="flex items-center justify-between">
+      <Label className="text-xs text-neutral-400">{label}</Label>
+      <Input
+        type="number"
+        value={decimals === 0 ? Math.round(value) : value.toFixed(decimals)}
+        onChange={(e) => {
+          const v = parseFloat(e.target.value);
+          if (!isNaN(v)) onChange(Math.min(max, Math.max(min, v)));
+        }}
+        min={min}
+        max={max}
+        step={step}
+        className="h-6 w-16 text-xs text-right bg-neutral-800 border-neutral-700 text-neutral-200 px-2"
+      />
+    </div>
+    <Slider
+      value={[value]}
+      onValueChange={([v]) => onChange(v)}
+      min={min}
+      max={max}
+      step={step}
+    />
+  </div>
+);
+
 // Pattern options
 const asciiPatterns = [
   { value: "donut", label: "Donut" },
@@ -97,6 +135,14 @@ export default function Home() {
   const [asciiDensity, setAsciiDensity] = useState(1);
   const [asciiColorMode, setAsciiColorMode] = useState("green");
   const [asciiColor, setAsciiColor] = useState("#00ff00");
+  // 3D Rotation controls
+  const [rotationX, setRotationX] = useState(0);
+  const [rotationY, setRotationY] = useState(0);
+  const [rotationZ, setRotationZ] = useState(0);
+  const [autoRotate, setAutoRotate] = useState(true);
+  const [autoRotateSpeedX, setAutoRotateSpeedX] = useState(0.5);
+  const [autoRotateSpeedY, setAutoRotateSpeedY] = useState(1);
+  const [autoRotateSpeedZ, setAutoRotateSpeedZ] = useState(0);
 
   // Wave
   const [wavePattern, setWavePattern] = useState("vortex");
@@ -151,6 +197,12 @@ export default function Home() {
       setAsciiSpeed(0.5 + Math.random() * 2);
       setAsciiDensity(0.7 + Math.random() * 0.6);
       setAsciiColorMode(asciiColorModes[Math.floor(Math.random() * asciiColorModes.length)].value);
+      setRotationX(Math.random() * 90 - 45);
+      setRotationY(Math.random() * 90 - 45);
+      setRotationZ(Math.random() * 60 - 30);
+      setAutoRotateSpeedX(Math.random() * 1.5);
+      setAutoRotateSpeedY(0.5 + Math.random() * 1.5);
+      setAutoRotateSpeedZ(Math.random() * 0.5);
     } else if (type === "wavefield") {
       setWavePattern(wavePatterns[Math.floor(Math.random() * wavePatterns.length)].value);
       setLineCount(20 + Math.floor(Math.random() * 40));
@@ -186,7 +238,14 @@ export default function Home() {
     enableNoise,
     enableVignette,
     seed,
-  }), [asciiPattern, asciiSpeed, asciiDensity, asciiColorMode, asciiColor, rainbowConfig, enableNoise, enableVignette, seed]);
+    rotationX,
+    rotationY,
+    rotationZ,
+    autoRotate,
+    autoRotateSpeedX,
+    autoRotateSpeedY,
+    autoRotateSpeedZ,
+  }), [asciiPattern, asciiSpeed, asciiDensity, asciiColorMode, asciiColor, rainbowConfig, enableNoise, enableVignette, seed, rotationX, rotationY, rotationZ, autoRotate, autoRotateSpeedX, autoRotateSpeedY, autoRotateSpeedZ]);
 
   const waveProps = useMemo(() => ({
     backgroundColor: "#000000",
@@ -416,54 +475,107 @@ export default function Home() {
 
             <div className="h-6 w-px bg-neutral-700" />
 
-            {/* Primary Slider */}
-            <div className="flex items-center gap-3 min-w-[180px]">
+            {/* Primary Slider with Input */}
+            <div className="flex items-center gap-3 min-w-[220px]">
               <Label className="text-sm text-neutral-400 w-12">
                 {type === "ascii" ? "Speed" : type === "wavefield" ? "Lines" : type === "tunnel" ? "Speed" : "Count"}
               </Label>
               {type === "ascii" && (
-                <Slider
-                  value={[asciiSpeed]}
-                  onValueChange={([v]) => setAsciiSpeed(v)}
-                  min={0.3}
-                  max={3}
-                  step={0.1}
-                  className="flex-1"
-                />
+                <>
+                  <Slider
+                    value={[asciiSpeed]}
+                    onValueChange={([v]) => setAsciiSpeed(v)}
+                    min={0.3}
+                    max={3}
+                    step={0.1}
+                    className="flex-1"
+                  />
+                  <Input
+                    type="number"
+                    value={asciiSpeed.toFixed(1)}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value);
+                      if (!isNaN(v)) setAsciiSpeed(Math.min(3, Math.max(0.3, v)));
+                    }}
+                    min={0.3}
+                    max={3}
+                    step={0.1}
+                    className="h-7 w-16 text-xs text-right bg-neutral-800 border-neutral-700 text-neutral-200 px-2"
+                  />
+                </>
               )}
               {type === "wavefield" && (
-                <Slider
-                  value={[lineCount]}
-                  onValueChange={([v]) => setLineCount(v)}
-                  min={10}
-                  max={80}
-                  step={1}
-                  className="flex-1"
-                />
+                <>
+                  <Slider
+                    value={[lineCount]}
+                    onValueChange={([v]) => setLineCount(v)}
+                    min={10}
+                    max={80}
+                    step={1}
+                    className="flex-1"
+                  />
+                  <Input
+                    type="number"
+                    value={lineCount}
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value);
+                      if (!isNaN(v)) setLineCount(Math.min(80, Math.max(10, v)));
+                    }}
+                    min={10}
+                    max={80}
+                    step={1}
+                    className="h-7 w-16 text-xs text-right bg-neutral-800 border-neutral-700 text-neutral-200 px-2"
+                  />
+                </>
               )}
               {type === "tunnel" && (
-                <Slider
-                  value={[zoomSpeed]}
-                  onValueChange={([v]) => setZoomSpeed(v)}
-                  min={0.3}
-                  max={3}
-                  step={0.1}
-                  className="flex-1"
-                />
+                <>
+                  <Slider
+                    value={[zoomSpeed]}
+                    onValueChange={([v]) => setZoomSpeed(v)}
+                    min={0.3}
+                    max={3}
+                    step={0.1}
+                    className="flex-1"
+                  />
+                  <Input
+                    type="number"
+                    value={zoomSpeed.toFixed(1)}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value);
+                      if (!isNaN(v)) setZoomSpeed(Math.min(3, Math.max(0.3, v)));
+                    }}
+                    min={0.3}
+                    max={3}
+                    step={0.1}
+                    className="h-7 w-16 text-xs text-right bg-neutral-800 border-neutral-700 text-neutral-200 px-2"
+                  />
+                </>
               )}
               {type === "geometric" && (
-                <Slider
-                  value={[shapeCount]}
-                  onValueChange={([v]) => setShapeCount(v)}
-                  min={1}
-                  max={8}
-                  step={1}
-                  className="flex-1"
-                />
+                <>
+                  <Slider
+                    value={[shapeCount]}
+                    onValueChange={([v]) => setShapeCount(v)}
+                    min={1}
+                    max={8}
+                    step={1}
+                    className="flex-1"
+                  />
+                  <Input
+                    type="number"
+                    value={shapeCount}
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value);
+                      if (!isNaN(v)) setShapeCount(Math.min(8, Math.max(1, v)));
+                    }}
+                    min={1}
+                    max={8}
+                    step={1}
+                    className="h-7 w-16 text-xs text-right bg-neutral-800 border-neutral-700 text-neutral-200 px-2"
+                  />
+                </>
               )}
-              <span className="text-sm text-neutral-500 w-8 text-right tabular-nums">
-                {type === "ascii" ? asciiSpeed.toFixed(1) : type === "wavefield" ? lineCount : type === "tunnel" ? zoomSpeed.toFixed(1) : shapeCount}
-              </span>
             </div>
 
             <div className="flex-1" />
@@ -510,16 +622,14 @@ export default function Home() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs text-neutral-400">Density</Label>
-                      <Slider
-                        value={[asciiDensity]}
-                        onValueChange={([v]) => setAsciiDensity(v)}
-                        min={0.5}
-                        max={1.5}
-                        step={0.1}
-                      />
-                    </div>
+                    <SliderWithInput
+                      label="Density"
+                      value={asciiDensity}
+                      onChange={setAsciiDensity}
+                      min={0.5}
+                      max={1.5}
+                      step={0.1}
+                    />
                     {asciiColorMode === "single" && (
                       <div className="space-y-2">
                         <Label className="text-xs text-neutral-400">Color</Label>
@@ -531,51 +641,119 @@ export default function Home() {
                         />
                       </div>
                     )}
+                    {/* 3D Rotation Controls - only for 3D patterns */}
+                    {(asciiPattern === "donut" || asciiPattern === "cube" || asciiPattern === "sphere") && (
+                      <>
+                        <div className="col-span-2 md:col-span-4 lg:col-span-6 border-t border-neutral-700 pt-3 mt-2">
+                          <div className="flex items-center gap-3 mb-3">
+                            <Label className="text-xs text-neutral-300 font-medium">3D Rotation</Label>
+                            <label className="flex items-center gap-1.5 text-xs text-neutral-400">
+                              <input
+                                type="checkbox"
+                                checked={autoRotate}
+                                onChange={(e) => setAutoRotate(e.target.checked)}
+                                className="rounded border-neutral-600"
+                              />
+                              Auto-rotate
+                            </label>
+                          </div>
+                        </div>
+                        <SliderWithInput
+                          label="Rotation X"
+                          value={rotationX}
+                          onChange={setRotationX}
+                          min={-180}
+                          max={180}
+                          step={1}
+                          decimals={0}
+                        />
+                        <SliderWithInput
+                          label="Rotation Y"
+                          value={rotationY}
+                          onChange={setRotationY}
+                          min={-180}
+                          max={180}
+                          step={1}
+                          decimals={0}
+                        />
+                        <SliderWithInput
+                          label="Rotation Z"
+                          value={rotationZ}
+                          onChange={setRotationZ}
+                          min={-180}
+                          max={180}
+                          step={1}
+                          decimals={0}
+                        />
+                        {autoRotate && (
+                          <>
+                            <SliderWithInput
+                              label="Speed X"
+                              value={autoRotateSpeedX}
+                              onChange={setAutoRotateSpeedX}
+                              min={0}
+                              max={3}
+                              step={0.1}
+                            />
+                            <SliderWithInput
+                              label="Speed Y"
+                              value={autoRotateSpeedY}
+                              onChange={setAutoRotateSpeedY}
+                              min={0}
+                              max={3}
+                              step={0.1}
+                            />
+                            <SliderWithInput
+                              label="Speed Z"
+                              value={autoRotateSpeedZ}
+                              onChange={setAutoRotateSpeedZ}
+                              min={0}
+                              max={3}
+                              step={0.1}
+                            />
+                          </>
+                        )}
+                      </>
+                    )}
                   </>
                 )}
 
                 {type === "wavefield" && (
                   <>
-                    <div className="space-y-2">
-                      <Label className="text-xs text-neutral-400">Amplitude</Label>
-                      <Slider
-                        value={[waveAmplitude]}
-                        onValueChange={([v]) => setWaveAmplitude(v)}
-                        min={10}
-                        max={150}
-                        step={5}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs text-neutral-400">Frequency</Label>
-                      <Slider
-                        value={[waveFrequency]}
-                        onValueChange={([v]) => setWaveFrequency(v)}
-                        min={0.5}
-                        max={8}
-                        step={0.5}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs text-neutral-400">Speed</Label>
-                      <Slider
-                        value={[waveSpeed]}
-                        onValueChange={([v]) => setWaveSpeed(v)}
-                        min={0.1}
-                        max={3}
-                        step={0.1}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs text-neutral-400">Perspective</Label>
-                      <Slider
-                        value={[wavePerspective]}
-                        onValueChange={([v]) => setWavePerspective(v)}
-                        min={0}
-                        max={1}
-                        step={0.05}
-                      />
-                    </div>
+                    <SliderWithInput
+                      label="Amplitude"
+                      value={waveAmplitude}
+                      onChange={setWaveAmplitude}
+                      min={10}
+                      max={150}
+                      step={5}
+                      decimals={0}
+                    />
+                    <SliderWithInput
+                      label="Frequency"
+                      value={waveFrequency}
+                      onChange={setWaveFrequency}
+                      min={0.5}
+                      max={8}
+                      step={0.5}
+                    />
+                    <SliderWithInput
+                      label="Speed"
+                      value={waveSpeed}
+                      onChange={setWaveSpeed}
+                      min={0.1}
+                      max={3}
+                      step={0.1}
+                    />
+                    <SliderWithInput
+                      label="Perspective"
+                      value={wavePerspective}
+                      onChange={setWavePerspective}
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      decimals={2}
+                    />
                     <div className="space-y-2">
                       <Label className="text-xs text-neutral-400">Color Mode</Label>
                       <Select value={waveColorMode} onValueChange={setWaveColorMode}>
@@ -631,43 +809,40 @@ export default function Home() {
                         </SelectContent>
                       </Select>
                     </div>
+                    <SliderWithInput
+                      label="Layers"
+                      value={layerCount}
+                      onChange={setLayerCount}
+                      min={10}
+                      max={60}
+                      step={1}
+                      decimals={0}
+                    />
+                    <SliderWithInput
+                      label="Rotation"
+                      value={tunnelRotation}
+                      onChange={setTunnelRotation}
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      decimals={2}
+                    />
+                    <SliderWithInput
+                      label="Glow"
+                      value={glowIntensity}
+                      onChange={setGlowIntensity}
+                      min={0.3}
+                      max={2}
+                      step={0.1}
+                    />
                     <div className="space-y-2">
-                      <Label className="text-xs text-neutral-400">Layers</Label>
-                      <Slider
-                        value={[layerCount]}
-                        onValueChange={([v]) => setLayerCount(v)}
-                        min={10}
-                        max={60}
-                        step={1}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs text-neutral-400">Rotation</Label>
-                      <Slider
-                        value={[tunnelRotation]}
-                        onValueChange={([v]) => setTunnelRotation(v)}
-                        min={0}
-                        max={1}
-                        step={0.05}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs text-neutral-400">Glow</Label>
-                      <div className="flex items-center gap-2">
+                      <Label className="text-xs text-neutral-400">Enable Glow</Label>
+                      <div className="flex items-center h-8">
                         <input
                           type="checkbox"
                           checked={enableGlow}
                           onChange={(e) => setEnableGlow(e.target.checked)}
-                          className="rounded border-neutral-700"
-                        />
-                        <Slider
-                          value={[glowIntensity]}
-                          onValueChange={([v]) => setGlowIntensity(v)}
-                          min={0.3}
-                          max={2}
-                          step={0.1}
-                          disabled={!enableGlow}
-                          className="flex-1"
+                          className="rounded border-neutral-700 h-4 w-4"
                         />
                       </div>
                     </div>
@@ -691,16 +866,14 @@ export default function Home() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs text-neutral-400">Speed</Label>
-                      <Slider
-                        value={[motionSpeed]}
-                        onValueChange={([v]) => setMotionSpeed(v)}
-                        min={0.1}
-                        max={3}
-                        step={0.1}
-                      />
-                    </div>
+                    <SliderWithInput
+                      label="Speed"
+                      value={motionSpeed}
+                      onChange={setMotionSpeed}
+                      min={0.1}
+                      max={3}
+                      step={0.1}
+                    />
                     <div className="space-y-2">
                       <Label className="text-xs text-neutral-400">Primary</Label>
                       <Input
@@ -732,27 +905,24 @@ export default function Home() {
                 )}
 
                 {/* Shared controls */}
-                <div className="space-y-2">
-                  <Label className="text-xs text-neutral-400">Hue Range</Label>
-                  <div className="flex gap-1">
-                    <Slider
-                      value={[hueStart]}
-                      onValueChange={([v]) => setHueStart(v)}
-                      min={0}
-                      max={360}
-                      step={5}
-                      className="flex-1"
-                    />
-                    <Slider
-                      value={[hueEnd]}
-                      onValueChange={([v]) => setHueEnd(v)}
-                      min={0}
-                      max={360}
-                      step={5}
-                      className="flex-1"
-                    />
-                  </div>
-                </div>
+                <SliderWithInput
+                  label="Hue Start"
+                  value={hueStart}
+                  onChange={setHueStart}
+                  min={0}
+                  max={360}
+                  step={5}
+                  decimals={0}
+                />
+                <SliderWithInput
+                  label="Hue End"
+                  value={hueEnd}
+                  onChange={setHueEnd}
+                  min={0}
+                  max={360}
+                  step={5}
+                  decimals={0}
+                />
 
                 <div className="space-y-2">
                   <Label className="text-xs text-neutral-400">Effects</Label>
@@ -779,13 +949,15 @@ export default function Home() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-xs text-neutral-400">Seed</Label>
-                  <Input
-                    type="number"
-                    value={seed}
-                    onChange={(e) => setSeed(parseInt(e.target.value) || 0)}
-                    className="h-8 text-xs bg-neutral-800 border-neutral-700 text-neutral-200"
-                  />
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs text-neutral-400">Seed</Label>
+                    <Input
+                      type="number"
+                      value={seed}
+                      onChange={(e) => setSeed(parseInt(e.target.value) || 0)}
+                      className="h-6 w-20 text-xs text-right bg-neutral-800 border-neutral-700 text-neutral-200 px-2"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
