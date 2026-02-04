@@ -182,6 +182,9 @@ const tunnelPatternTypes = [
 ];
 
 const shaderPatterns = [
+  { value: "psychedelic", label: "Psychedelic" },
+  { value: "vortex", label: "Vortex" },
+  { value: "diagonalWaves", label: "Diagonal Waves" },
   { value: "hypnotic", label: "Hypnotic" },
   { value: "voronoi", label: "Voronoi" },
   { value: "kaleidoscope", label: "Kaleidoscope" },
@@ -338,7 +341,7 @@ export default function Home() {
   const [bgColor, setBgColor] = useState("#0a1628");
 
   // Shader
-  const [shaderPattern, setShaderPattern] = useState("hypnotic");
+  const [shaderPattern, setShaderPattern] = useState("psychedelic");
   const [shaderSpeed, setShaderSpeed] = useState(1);
   const [shaderComplexity, setShaderComplexity] = useState(1);
   const [shaderColorA, setShaderColorA] = useState("#00ffff");

@@ -10,7 +10,10 @@ type ShaderPatternType =
   | "tunnel"
   | "fractal"
   | "moire"
-  | "waves";
+  | "waves"
+  | "psychedelic"
+  | "vortex"
+  | "diagonalWaves";
 
 interface ShaderCanvasProps {
   pattern: ShaderPatternType;
@@ -134,6 +137,143 @@ const fragmentShaderSource = `
     } else {
       return mix(u_colorB, u_colorC, (t - 0.5) * 2.0);
     }
+  }
+
+  // Rainbow color from hue
+  vec3 rainbow(float t) {
+    vec3 c = vec3(t * 6.0);
+    c = clamp(abs(mod(c + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+    return c;
+  }
+
+  // Psychedelic spiral pattern (Reference image 1)
+  vec3 psychedelicPattern(vec2 uv) {
+    vec2 p = uv - 0.5;
+    p.x *= u_resolution.x / u_resolution.y;
+    p *= u_zoom * 2.0;
+
+    float r = length(p);
+    float a = atan(p.y, p.x);
+
+    float t = u_time * u_speed * 0.5;
+
+    // Number of spiral arms
+    float arms = floor(u_symmetry + 0.5);
+    if (arms < 1.0) arms = 8.0;
+
+    // Create wavy spiral pattern
+    float wave = sin(r * 15.0 * u_complexity - t * 3.0) * 0.3;
+    float spiral = a * arms / TAU + r * 2.0 * u_complexity - t;
+    spiral += wave;
+
+    // Create color bands
+    float band = fract(spiral);
+
+    // Add secondary wave distortion
+    float distort = sin(a * arms * 2.0 + r * 10.0 - t * 2.0) * 0.1;
+    band = fract(band + distort);
+
+    // Rainbow colors cycling through bands
+    float hue = band + t * 0.2;
+    vec3 color = rainbow(fract(hue));
+
+    // Add brightness variation
+    float brightness = 0.7 + 0.3 * sin(band * TAU * 2.0);
+    color *= brightness;
+
+    return color;
+  }
+
+  // Smooth vortex tunnel (Reference image 2)
+  vec3 vortexPattern(vec2 uv) {
+    vec2 p = uv - 0.5;
+    p.x *= u_resolution.x / u_resolution.y;
+
+    float r = length(p);
+    float a = atan(p.y, p.x);
+
+    float t = u_time * u_speed;
+
+    // Number of rays
+    float rays = floor(u_symmetry + 0.5);
+    if (rays < 4.0) rays = 12.0;
+
+    // Create spiral twist that increases toward center
+    float twist = (1.0 / (r + 0.1)) * u_complexity * 0.5;
+    float spiral = a + twist - t * 0.5;
+
+    // Create ray pattern
+    float ray = sin(spiral * rays) * 0.5 + 0.5;
+
+    // Smooth the rays
+    ray = smoothstep(0.3, 0.7, ray);
+
+    // Color based on angle for rainbow effect
+    float hue = a / TAU + 0.5 + t * 0.1;
+    vec3 baseColor = rainbow(fract(hue));
+
+    // Background color (white/cream)
+    vec3 bgColor = vec3(0.95, 0.93, 0.9);
+
+    // Mix ray color with background
+    vec3 color = mix(bgColor, baseColor, ray);
+
+    // Darken toward center for depth
+    float centerDark = smoothstep(0.0, 0.3, r);
+    color *= 0.3 + 0.7 * centerDark;
+
+    // Add subtle glow at center
+    color += vec3(0.8, 0.9, 1.0) * (1.0 - smoothstep(0.0, 0.15, r)) * 0.5;
+
+    return color;
+  }
+
+  // Diagonal wave pattern (Reference image 3)
+  vec3 diagonalWavesPattern(vec2 uv) {
+    vec2 p = uv - 0.5;
+    p.x *= u_resolution.x / u_resolution.y;
+    p *= u_zoom;
+
+    // Rotate to diagonal
+    float angle = u_rotation + PI * 0.25;
+    p *= rot(angle);
+
+    float t = u_time * u_speed;
+
+    // Wave parameters
+    float waveFreq = u_complexity * 20.0;
+    float waveAmp = 0.03 / u_complexity;
+
+    // Create parallel wavy lines
+    float wave = sin(p.x * 8.0 + t) * waveAmp;
+    float linePattern = p.y + wave;
+
+    // Create line grid
+    float lineSpacing = 0.05 / u_complexity;
+    float line = abs(fract(linePattern / lineSpacing) - 0.5) * 2.0;
+
+    // Smooth the lines
+    float lineWidth = 0.3;
+    float lineMask = 1.0 - smoothstep(lineWidth - 0.1, lineWidth + 0.1, line);
+
+    // Add secondary wave for more organic feel
+    float wave2 = sin(p.x * 12.0 - t * 0.7 + p.y * 5.0) * waveAmp * 0.5;
+    lineMask *= 1.0 + wave2 * 5.0;
+    lineMask = clamp(lineMask, 0.0, 1.0);
+
+    // Colors
+    vec3 lineColor = vec3(0.85, 0.85, 0.85);
+    vec3 bgColor = vec3(0.1, 0.1, 0.12);
+
+    // Add subtle noise texture
+    if (u_noise) {
+      float n = noise(p * 100.0 + t);
+      lineMask *= 0.8 + 0.4 * n;
+    }
+
+    vec3 color = mix(bgColor, lineColor, lineMask * 0.8);
+
+    return color;
   }
 
   vec3 hypnoticPattern(vec2 uv) {
@@ -321,7 +461,6 @@ const fragmentShaderSource = `
 
   void main() {
     vec2 uv = v_uv;
-    uv.x *= u_resolution.x / u_resolution.y;
     vec3 color;
     if (u_pattern == 0) color = hypnoticPattern(uv);
     else if (u_pattern == 1) color = voronoiPattern(uv);
@@ -330,12 +469,17 @@ const fragmentShaderSource = `
     else if (u_pattern == 4) color = tunnelPattern(uv);
     else if (u_pattern == 5) color = fractalPattern(uv);
     else if (u_pattern == 6) color = moirePattern(uv);
-    else color = wavesPattern(uv);
-    if (u_noise) {
+    else if (u_pattern == 7) color = wavesPattern(uv);
+    else if (u_pattern == 8) color = psychedelicPattern(uv);
+    else if (u_pattern == 9) color = vortexPattern(uv);
+    else if (u_pattern == 10) color = diagonalWavesPattern(uv);
+    else color = hypnoticPattern(uv);
+
+    if (u_noise && u_pattern != 10) {
       float grain = hash(uv * 1000.0 + u_time) * 0.05;
       color += grain - 0.025;
     }
-    float vignette = 1.0 - length(v_uv - 0.5) * 0.5;
+    float vignette = 1.0 - length(v_uv - 0.5) * 0.3;
     color *= vignette;
     gl_FragColor = vec4(color, 1.0);
   }
@@ -350,6 +494,9 @@ const patternIndexMap: Record<ShaderPatternType, number> = {
   fractal: 5,
   moire: 6,
   waves: 7,
+  psychedelic: 8,
+  vortex: 9,
+  diagonalWaves: 10,
 };
 
 export interface ShaderCanvasHandle {
