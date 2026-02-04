@@ -27,7 +27,6 @@ interface ShaderCanvasProps {
   paused?: boolean;
 }
 
-// Convert hex to RGB normalized
 const hexToRgb = (hex: string): [number, number, number] => {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
   return result
@@ -39,23 +38,18 @@ const hexToRgb = (hex: string): [number, number, number] => {
     : [1, 1, 1];
 };
 
-// Vertex shader
 const vertexShaderSource = `
   attribute vec2 a_position;
   varying vec2 v_uv;
-
   void main() {
     v_uv = a_position * 0.5 + 0.5;
     gl_Position = vec4(a_position, 0.0, 1.0);
   }
 `;
 
-// Fragment shader
 const fragmentShaderSource = `
   precision highp float;
-
   varying vec2 v_uv;
-
   uniform float u_time;
   uniform vec2 u_resolution;
   uniform int u_pattern;
@@ -354,167 +348,158 @@ const patternIndexMap: Record<ShaderPatternType, number> = {
   waves: 7,
 };
 
-export const ShaderCanvas: React.FC<ShaderCanvasProps> = ({
-  pattern = "hypnotic",
-  speed = 1,
-  complexity = 1,
-  colorA = "#00ffff",
-  colorB = "#ff0066",
-  colorC = "#000000",
-  symmetry = 3,
-  zoom = 1,
-  rotation = 0,
-  enableNoise = false,
-  seed = 42,
-  paused = false,
-}) => {
+export const ShaderCanvas: React.FC<ShaderCanvasProps> = (props) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const glRef = useRef<WebGLRenderingContext | null>(null);
-  const programRef = useRef<WebGLProgram | null>(null);
-  const animationRef = useRef<number>(0);
-  const startTimeRef = useRef<number>(performance.now());
-
-  // Store props in refs for animation loop
-  const propsRef = useRef({
-    pattern, speed, complexity, colorA, colorB, colorC,
-    symmetry, zoom, rotation, enableNoise, seed, paused,
+  const stateRef = useRef<{
+    gl: WebGLRenderingContext | null;
+    program: WebGLProgram | null;
+    animationId: number;
+    startTime: number;
+  }>({
+    gl: null,
+    program: null,
+    animationId: 0,
+    startTime: 0,
   });
+  const propsRef = useRef(props);
+  propsRef.current = props;
 
-  // Update props ref
-  useEffect(() => {
-    propsRef.current = {
-      pattern, speed, complexity, colorA, colorB, colorC,
-      symmetry, zoom, rotation, enableNoise, seed, paused,
-    };
-  }, [pattern, speed, complexity, colorA, colorB, colorC, symmetry, zoom, rotation, enableNoise, seed, paused]);
-
-  // Initialize WebGL once
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    // Set canvas size
-    const updateSize = () => {
+    // Wait for canvas to have dimensions
+    const initWebGL = () => {
       const rect = canvas.getBoundingClientRect();
-      const dpr = Math.min(window.devicePixelRatio, 2);
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-      if (glRef.current) {
-        glRef.current.viewport(0, 0, canvas.width, canvas.height);
-      }
-    };
-
-    updateSize();
-
-    const gl = canvas.getContext("webgl", {
-      alpha: false,
-      antialias: false,
-      depth: false,
-      stencil: false,
-      preserveDrawingBuffer: false,
-      powerPreference: "high-performance",
-    });
-
-    if (!gl) {
-      console.error("WebGL not supported");
-      return;
-    }
-
-    glRef.current = gl;
-
-    // Compile shaders
-    const vertexShader = gl.createShader(gl.VERTEX_SHADER)!;
-    gl.shaderSource(vertexShader, vertexShaderSource);
-    gl.compileShader(vertexShader);
-    if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
-      console.error("Vertex shader error:", gl.getShaderInfoLog(vertexShader));
-      return;
-    }
-
-    const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER)!;
-    gl.shaderSource(fragmentShader, fragmentShaderSource);
-    gl.compileShader(fragmentShader);
-    if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
-      console.error("Fragment shader error:", gl.getShaderInfoLog(fragmentShader));
-      return;
-    }
-
-    // Create program
-    const program = gl.createProgram()!;
-    gl.attachShader(program, vertexShader);
-    gl.attachShader(program, fragmentShader);
-    gl.linkProgram(program);
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-      console.error("Program link error:", gl.getProgramInfoLog(program));
-      return;
-    }
-
-    programRef.current = program;
-    gl.useProgram(program);
-
-    // Create fullscreen quad
-    const positions = new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]);
-    const buffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
-
-    const positionLocation = gl.getAttribLocation(program, "a_position");
-    gl.enableVertexAttribArray(positionLocation);
-    gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
-
-    // Animation loop
-    const render = (time: number) => {
-      const gl = glRef.current;
-      const program = programRef.current;
-      const canvas = canvasRef.current;
-      const props = propsRef.current;
-
-      if (!gl || !program || !canvas || props.paused) {
-        animationRef.current = requestAnimationFrame(render);
+      if (rect.width === 0 || rect.height === 0) {
+        requestAnimationFrame(initWebGL);
         return;
       }
 
-      const elapsed = (time - startTimeRef.current) / 1000;
+      const dpr = Math.min(window.devicePixelRatio, 2);
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
 
-      gl.uniform1f(gl.getUniformLocation(program, "u_time"), elapsed);
-      gl.uniform2f(gl.getUniformLocation(program, "u_resolution"), canvas.width, canvas.height);
-      gl.uniform1i(gl.getUniformLocation(program, "u_pattern"), patternIndexMap[props.pattern] ?? 0);
-      gl.uniform1f(gl.getUniformLocation(program, "u_speed"), props.speed);
-      gl.uniform1f(gl.getUniformLocation(program, "u_complexity"), props.complexity);
-      gl.uniform3fv(gl.getUniformLocation(program, "u_colorA"), hexToRgb(props.colorA));
-      gl.uniform3fv(gl.getUniformLocation(program, "u_colorB"), hexToRgb(props.colorB));
-      gl.uniform3fv(gl.getUniformLocation(program, "u_colorC"), hexToRgb(props.colorC));
-      gl.uniform1f(gl.getUniformLocation(program, "u_symmetry"), props.symmetry);
-      gl.uniform1f(gl.getUniformLocation(program, "u_zoom"), props.zoom);
-      gl.uniform1f(gl.getUniformLocation(program, "u_rotation"), props.rotation * Math.PI / 180);
-      gl.uniform1f(gl.getUniformLocation(program, "u_seed"), props.seed);
-      gl.uniform1i(gl.getUniformLocation(program, "u_noise"), props.enableNoise ? 1 : 0);
+      const gl = canvas.getContext("webgl", {
+        alpha: false,
+        antialias: false,
+        depth: false,
+        stencil: false,
+        powerPreference: "high-performance",
+      });
 
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-      animationRef.current = requestAnimationFrame(render);
+      if (!gl) {
+        console.error("WebGL not supported");
+        return;
+      }
+
+      // Compile shaders
+      const vertexShader = gl.createShader(gl.VERTEX_SHADER)!;
+      gl.shaderSource(vertexShader, vertexShaderSource);
+      gl.compileShader(vertexShader);
+      if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
+        console.error("Vertex shader:", gl.getShaderInfoLog(vertexShader));
+        return;
+      }
+
+      const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER)!;
+      gl.shaderSource(fragmentShader, fragmentShaderSource);
+      gl.compileShader(fragmentShader);
+      if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
+        console.error("Fragment shader:", gl.getShaderInfoLog(fragmentShader));
+        return;
+      }
+
+      const program = gl.createProgram()!;
+      gl.attachShader(program, vertexShader);
+      gl.attachShader(program, fragmentShader);
+      gl.linkProgram(program);
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        console.error("Link:", gl.getProgramInfoLog(program));
+        return;
+      }
+
+      gl.useProgram(program);
+
+      // Fullscreen quad
+      const buffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+      const posLoc = gl.getAttribLocation(program, "a_position");
+      gl.enableVertexAttribArray(posLoc);
+      gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+
+      gl.viewport(0, 0, canvas.width, canvas.height);
+
+      stateRef.current = {
+        gl,
+        program,
+        animationId: 0,
+        startTime: performance.now(),
+      };
+
+      // Start render loop
+      const render = () => {
+        const { gl, program, startTime } = stateRef.current;
+        const p = propsRef.current;
+
+        if (!gl || !program) return;
+
+        if (!p.paused) {
+          const time = (performance.now() - startTime) / 1000;
+
+          gl.uniform1f(gl.getUniformLocation(program, "u_time"), time);
+          gl.uniform2f(gl.getUniformLocation(program, "u_resolution"), canvas.width, canvas.height);
+          gl.uniform1i(gl.getUniformLocation(program, "u_pattern"), patternIndexMap[p.pattern] ?? 0);
+          gl.uniform1f(gl.getUniformLocation(program, "u_speed"), p.speed);
+          gl.uniform1f(gl.getUniformLocation(program, "u_complexity"), p.complexity);
+          gl.uniform3fv(gl.getUniformLocation(program, "u_colorA"), hexToRgb(p.colorA));
+          gl.uniform3fv(gl.getUniformLocation(program, "u_colorB"), hexToRgb(p.colorB));
+          gl.uniform3fv(gl.getUniformLocation(program, "u_colorC"), hexToRgb(p.colorC));
+          gl.uniform1f(gl.getUniformLocation(program, "u_symmetry"), p.symmetry);
+          gl.uniform1f(gl.getUniformLocation(program, "u_zoom"), p.zoom);
+          gl.uniform1f(gl.getUniformLocation(program, "u_rotation"), p.rotation * Math.PI / 180);
+          gl.uniform1f(gl.getUniformLocation(program, "u_seed"), p.seed);
+          gl.uniform1i(gl.getUniformLocation(program, "u_noise"), p.enableNoise ? 1 : 0);
+
+          gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        }
+
+        stateRef.current.animationId = requestAnimationFrame(render);
+      };
+
+      stateRef.current.animationId = requestAnimationFrame(render);
+
+      // Resize handler
+      const resizeObserver = new ResizeObserver(() => {
+        const rect = canvas.getBoundingClientRect();
+        const dpr = Math.min(window.devicePixelRatio, 2);
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        gl.viewport(0, 0, canvas.width, canvas.height);
+      });
+      resizeObserver.observe(canvas);
+
+      return () => {
+        resizeObserver.disconnect();
+        cancelAnimationFrame(stateRef.current.animationId);
+        gl.deleteProgram(program);
+        gl.deleteShader(vertexShader);
+        gl.deleteShader(fragmentShader);
+      };
     };
 
-    // Start animation
-    startTimeRef.current = performance.now();
-    animationRef.current = requestAnimationFrame(render);
-
-    // Handle resize
-    const resizeObserver = new ResizeObserver(updateSize);
-    resizeObserver.observe(canvas);
-
+    const cleanup = initWebGL();
     return () => {
-      cancelAnimationFrame(animationRef.current);
-      resizeObserver.disconnect();
-      gl.deleteProgram(program);
-      gl.deleteShader(vertexShader);
-      gl.deleteShader(fragmentShader);
+      cancelAnimationFrame(stateRef.current.animationId);
+      if (typeof cleanup === 'function') cleanup();
     };
-  }, []); // Empty deps - only run once
+  }, []);
 
   return (
     <canvas
       ref={canvasRef}
-      style={{ width: "100%", height: "100%", display: "block" }}
+      style={{ width: "100%", height: "100%", display: "block", background: "#000" }}
     />
   );
 };
