@@ -24,6 +24,8 @@ import { Slider } from "@/components/ui/slider";
 import { EnhancedGeometric } from "@/remotion/compositions/EnhancedGeometric";
 import { AsciiAnimation } from "@/remotion/compositions/AsciiAnimation";
 import { WaveField } from "@/remotion/compositions/WaveField";
+import { TunnelZoom } from "@/remotion/compositions/TunnelZoom";
+import { defaultRainbowConfig } from "@/remotion/utils/colors";
 
 const geometricShapes = [
   { value: "hexagon", label: "Hexagon" },
@@ -50,6 +52,20 @@ const wavePatterns = [
   { value: "fabric", label: "Fabric" },
 ];
 
+const tunnelShapes = [
+  { value: "circle", label: "Circle" },
+  { value: "triangle", label: "Triangle" },
+  { value: "square", label: "Square" },
+  { value: "hexagon", label: "Hexagon" },
+  { value: "octagon", label: "Octagon" },
+  { value: "star", label: "Star" },
+];
+
+const tunnelPatterns = [
+  { value: "concentric", label: "Concentric" },
+  { value: "starburst", label: "Starburst" },
+];
+
 const ditherPatterns = [
   { value: "bayer", label: "Bayer" },
   { value: "halftone", label: "Halftone" },
@@ -67,12 +83,15 @@ const motionPatterns = [
   { value: "pulse", label: "Pulse" },
 ];
 
-type AnimationType = "geometric" | "wavefield" | "ascii";
+type AnimationType = "geometric" | "wavefield" | "ascii" | "tunnel";
 type MotionPattern = "orbital" | "bounce" | "wave" | "spiral" | "chaos" | "pulse" | "float";
 type WavePattern = "waves" | "spiral" | "vortex" | "terrain" | "ripple" | "fabric";
+type TunnelShape = "circle" | "triangle" | "square" | "hexagon" | "star" | "octagon";
+type TunnelPattern = "concentric" | "starburst";
+type ColorMode = "single" | "gradient" | "rainbow";
 
 export default function Home() {
-  const [type, setType] = useState<AnimationType>("wavefield");
+  const [type, setType] = useState<AnimationType>("tunnel");
   const [shape, setShape] = useState("hexagon");
   const [text, setText] = useState("HELLO");
   const [backgroundColor, setBackgroundColor] = useState("#000000");
@@ -113,7 +132,43 @@ export default function Home() {
   const [perspective, setPerspective] = useState(0.6);
   const [rotationSpeed, setRotationSpeed] = useState(0.5);
 
+  // Color mode controls (for wavefield and tunnel)
+  const [colorMode, setColorMode] = useState<ColorMode>("rainbow");
+  const [hueStart, setHueStart] = useState(defaultRainbowConfig.hueStart);
+  const [hueEnd, setHueEnd] = useState(defaultRainbowConfig.hueEnd);
+  const [saturation, setSaturation] = useState(defaultRainbowConfig.saturation);
+  const [lightness, setLightness] = useState(defaultRainbowConfig.lightness);
+  const [rainbowAnimate, setRainbowAnimate] = useState(defaultRainbowConfig.animate);
+  const [rainbowSpeed, setRainbowSpeed] = useState(defaultRainbowConfig.speed);
+  const [gradientColors, setGradientColors] = useState(["#ff0066", "#6600ff", "#00ff66"]);
+
+  // Tunnel controls
+  const [tunnelShape, setTunnelShape] = useState<TunnelShape>("circle");
+  const [tunnelPattern, setTunnelPattern] = useState<TunnelPattern>("concentric");
+  const [layerCount, setLayerCount] = useState(30);
+  const [zoomSpeed, setZoomSpeed] = useState(1);
+  const [zoomDirection, setZoomDirection] = useState<"in" | "out">("in");
+  const [tunnelRotationSpeed, setTunnelRotationSpeed] = useState(0.2);
+  const [strokeWidth, setStrokeWidth] = useState(3);
+
+  // Mesh gradient controls
+  const [enableMeshGradient, setEnableMeshGradient] = useState(false);
+  const [meshColors, setMeshColors] = useState(["#ff0066", "#6600ff", "#00ff66"]);
+
+  // Glow controls
+  const [enableGlow, setEnableGlow] = useState(true);
+  const [glowIntensity, setGlowIntensity] = useState(1);
+
   const [seed, setSeed] = useState(42);
+
+  const rainbowConfig = useMemo(() => ({
+    hueStart,
+    hueEnd,
+    saturation,
+    lightness,
+    animate: rainbowAnimate,
+    speed: rainbowSpeed,
+  }), [hueStart, hueEnd, saturation, lightness, rainbowAnimate, rainbowSpeed]);
 
   const handleTypeChange = (newType: AnimationType) => {
     setType(newType);
@@ -124,6 +179,10 @@ export default function Home() {
     } else if (newType === "wavefield") {
       setBackgroundColor("#000000");
       setPrimaryColor("#ffffff");
+    } else if (newType === "tunnel") {
+      setBackgroundColor("#000000");
+      setPrimaryColor("#ffffff");
+      setColorMode("rainbow");
     } else {
       setShape("cup");
       setBackgroundColor("#0066ff");
@@ -162,15 +221,53 @@ export default function Home() {
       setPerspective(0.3 + Math.random() * 0.5);
       setRotationSpeed(Math.random() * 1.5);
 
-      // Keep it black/white or subtle colors
-      if (Math.random() > 0.7) {
+      // Random color mode
+      const modes: ColorMode[] = ["single", "rainbow"];
+      setColorMode(modes[Math.floor(Math.random() * modes.length)]);
+
+      if (colorMode === "rainbow") {
+        setHueStart(Math.floor(Math.random() * 360));
+        setHueEnd(Math.floor(Math.random() * 360));
+        setSaturation(60 + Math.random() * 40);
+        setLightness(50 + Math.random() * 20);
+      } else {
         const hue = Math.floor(Math.random() * 360);
         setPrimaryColor(`hsl(${hue}, 60%, 70%)`);
         setBackgroundColor(`hsl(${hue}, 30%, 5%)`);
-      } else {
-        setPrimaryColor("#ffffff");
-        setBackgroundColor("#000000");
       }
+    } else if (type === "tunnel") {
+      const randomShape = tunnelShapes[Math.floor(Math.random() * tunnelShapes.length)].value as TunnelShape;
+      setTunnelShape(randomShape);
+      const randomPattern = tunnelPatterns[Math.floor(Math.random() * tunnelPatterns.length)].value as TunnelPattern;
+      setTunnelPattern(randomPattern);
+      setLayerCount(15 + Math.floor(Math.random() * 35));
+      setZoomSpeed(0.5 + Math.random() * 2);
+      setZoomDirection(Math.random() > 0.5 ? "in" : "out");
+      setTunnelRotationSpeed(Math.random() * 0.5);
+      setStrokeWidth(1 + Math.random() * 4);
+
+      // Random color mode
+      const modes: ColorMode[] = ["single", "gradient", "rainbow"];
+      setColorMode(modes[Math.floor(Math.random() * modes.length)]);
+
+      setHueStart(Math.floor(Math.random() * 360));
+      setHueEnd(Math.floor(Math.random() * 360));
+      setSaturation(60 + Math.random() * 40);
+      setLightness(50 + Math.random() * 20);
+      setRainbowSpeed(0.5 + Math.random() * 2);
+
+      setEnableMeshGradient(Math.random() > 0.6);
+      setEnableGlow(Math.random() > 0.3);
+      setGlowIntensity(0.5 + Math.random() * 1.5);
+
+      // Random gradient colors
+      const randomGradient = [
+        `hsl(${Math.floor(Math.random() * 360)}, 80%, 60%)`,
+        `hsl(${Math.floor(Math.random() * 360)}, 80%, 60%)`,
+        `hsl(${Math.floor(Math.random() * 360)}, 80%, 60%)`,
+      ];
+      setGradientColors(randomGradient);
+      setMeshColors(randomGradient);
     }
   };
 
@@ -212,7 +309,31 @@ export default function Home() {
     enableNoise,
     enableVignette,
     seed,
-  }), [backgroundColor, primaryColor, wavePattern, lineCount, amplitude, frequency, waveSpeed, perspective, rotationSpeed, enableNoise, enableVignette, seed]);
+    colorMode: colorMode as "single" | "rainbow",
+    rainbowConfig,
+  }), [backgroundColor, primaryColor, wavePattern, lineCount, amplitude, frequency, waveSpeed, perspective, rotationSpeed, enableNoise, enableVignette, seed, colorMode, rainbowConfig]);
+
+  const tunnelProps = useMemo(() => ({
+    backgroundColor,
+    primaryColor,
+    pattern: tunnelPattern,
+    shapeType: tunnelShape,
+    layerCount,
+    colorMode,
+    rainbowConfig,
+    gradientColors,
+    zoomSpeed,
+    zoomDirection,
+    enableMeshGradient,
+    meshColors,
+    enableGlow,
+    glowIntensity,
+    strokeWidth,
+    enableNoise,
+    enableVignette,
+    rotationSpeed: tunnelRotationSpeed,
+    seed,
+  }), [backgroundColor, primaryColor, tunnelPattern, tunnelShape, layerCount, colorMode, rainbowConfig, gradientColors, zoomSpeed, zoomDirection, enableMeshGradient, meshColors, enableGlow, glowIntensity, strokeWidth, enableNoise, enableVignette, tunnelRotationSpeed, seed]);
 
   const asciiProps = useMemo(() => ({
     text: text.toUpperCase(),
@@ -229,7 +350,7 @@ export default function Home() {
             Animation Visualizer
           </h1>
           <p className="mt-2 text-slate-400">
-            Generate stunning geometric, wave field, and ASCII art animations
+            Generate stunning geometric, wave field, tunnel, and ASCII art animations
           </p>
         </div>
 
@@ -279,6 +400,20 @@ export default function Home() {
                     autoPlay
                   />
                 )}
+                {type === "tunnel" && (
+                  <Player
+                    component={TunnelZoom}
+                    inputProps={tunnelProps}
+                    durationInFrames={duration * 30}
+                    fps={30}
+                    compositionWidth={1920}
+                    compositionHeight={1080}
+                    style={{ width: "100%", height: "100%" }}
+                    controls
+                    loop
+                    autoPlay
+                  />
+                )}
                 {type === "ascii" && (
                   <Player
                     component={AsciiAnimation}
@@ -313,9 +448,10 @@ export default function Home() {
                 value={type}
                 onValueChange={(v) => handleTypeChange(v as AnimationType)}
               >
-                <TabsList className="grid w-full grid-cols-3 h-8">
+                <TabsList className="grid w-full grid-cols-4 h-8">
                   <TabsTrigger value="geometric" className="text-xs">Geometric</TabsTrigger>
-                  <TabsTrigger value="wavefield" className="text-xs">Wave Field</TabsTrigger>
+                  <TabsTrigger value="wavefield" className="text-xs">Wave</TabsTrigger>
+                  <TabsTrigger value="tunnel" className="text-xs">Tunnel</TabsTrigger>
                   <TabsTrigger value="ascii" className="text-xs">ASCII</TabsTrigger>
                 </TabsList>
 
@@ -475,6 +611,433 @@ export default function Home() {
                       step={0.05}
                     />
                   </div>
+
+                  {/* Color Mode for WaveField */}
+                  <div className="border-t border-slate-800 pt-3">
+                    <Label className="text-amber-400 mb-2 block text-xs font-medium">Color Mode</Label>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {[
+                        { label: "Single", value: "single" },
+                        { label: "Rainbow", value: "rainbow" },
+                      ].map((mode) => (
+                        <button
+                          key={mode.value}
+                          onClick={() => setColorMode(mode.value as ColorMode)}
+                          className={`px-2 py-1.5 rounded-md text-xs transition-colors ${
+                            colorMode === mode.value
+                              ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                              : "bg-slate-800/50 text-slate-400 border border-slate-700"
+                          }`}
+                        >
+                          {mode.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Rainbow settings for WaveField */}
+                  {colorMode === "rainbow" && (
+                    <div className="space-y-2 pt-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-xs">Hue Start</Label>
+                            <span className="text-xs text-slate-400">{hueStart}°</span>
+                          </div>
+                          <Slider
+                            value={[hueStart]}
+                            onValueChange={([v]) => setHueStart(v)}
+                            min={0}
+                            max={360}
+                            step={5}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-xs">Hue End</Label>
+                            <span className="text-xs text-slate-400">{hueEnd}°</span>
+                          </div>
+                          <Slider
+                            value={[hueEnd]}
+                            onValueChange={([v]) => setHueEnd(v)}
+                            min={0}
+                            max={360}
+                            step={5}
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-xs">Saturation</Label>
+                            <span className="text-xs text-slate-400">{saturation}%</span>
+                          </div>
+                          <Slider
+                            value={[saturation]}
+                            onValueChange={([v]) => setSaturation(v)}
+                            min={0}
+                            max={100}
+                            step={5}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-xs">Lightness</Label>
+                            <span className="text-xs text-slate-400">{lightness}%</span>
+                          </div>
+                          <Slider
+                            value={[lightness]}
+                            onValueChange={([v]) => setLightness(v)}
+                            min={20}
+                            max={80}
+                            step={5}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setRainbowAnimate(!rainbowAnimate)}
+                          className={`flex-1 px-2 py-1.5 rounded-md text-xs transition-colors ${
+                            rainbowAnimate
+                              ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                              : "bg-slate-800/50 text-slate-400 border border-slate-700"
+                          }`}
+                        >
+                          Animate Hue
+                        </button>
+                        {rainbowAnimate && (
+                          <div className="flex-1 space-y-1">
+                            <Slider
+                              value={[rainbowSpeed]}
+                              onValueChange={([v]) => setRainbowSpeed(v)}
+                              min={0.1}
+                              max={3}
+                              step={0.1}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Tunnel Controls */}
+              {type === "tunnel" && (
+                <>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Pattern</Label>
+                      <Select value={tunnelPattern} onValueChange={(v) => setTunnelPattern(v as TunnelPattern)}>
+                        <SelectTrigger className="bg-slate-800/50 h-8 text-sm">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {tunnelPatterns.map((p) => (
+                            <SelectItem key={p.value} value={p.value}>
+                              {p.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Shape</Label>
+                      <Select value={tunnelShape} onValueChange={(v) => setTunnelShape(v as TunnelShape)}>
+                        <SelectTrigger className="bg-slate-800/50 h-8 text-sm">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {tunnelShapes.map((s) => (
+                            <SelectItem key={s.value} value={s.value}>
+                              {s.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs">Layer Count</Label>
+                      <span className="text-xs text-slate-400">{layerCount}</span>
+                    </div>
+                    <Slider
+                      value={[layerCount]}
+                      onValueChange={([v]) => setLayerCount(v)}
+                      min={10}
+                      max={60}
+                      step={1}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs">Zoom Speed</Label>
+                        <span className="text-xs text-slate-400">{zoomSpeed.toFixed(1)}</span>
+                      </div>
+                      <Slider
+                        value={[zoomSpeed]}
+                        onValueChange={([v]) => setZoomSpeed(v)}
+                        min={0.3}
+                        max={3}
+                        step={0.1}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs">Rotation</Label>
+                        <span className="text-xs text-slate-400">{tunnelRotationSpeed.toFixed(1)}</span>
+                      </div>
+                      <Slider
+                        value={[tunnelRotationSpeed]}
+                        onValueChange={([v]) => setTunnelRotationSpeed(v)}
+                        min={0}
+                        max={1}
+                        step={0.05}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs">Stroke Width</Label>
+                        <span className="text-xs text-slate-400">{strokeWidth.toFixed(1)}</span>
+                      </div>
+                      <Slider
+                        value={[strokeWidth]}
+                        onValueChange={([v]) => setStrokeWidth(v)}
+                        min={1}
+                        max={6}
+                        step={0.5}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Direction</Label>
+                      <div className="grid grid-cols-2 gap-1">
+                        {["in", "out"].map((dir) => (
+                          <button
+                            key={dir}
+                            onClick={() => setZoomDirection(dir as "in" | "out")}
+                            className={`px-2 py-1 rounded-md text-xs transition-colors ${
+                              zoomDirection === dir
+                                ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                                : "bg-slate-800/50 text-slate-400 border border-slate-700"
+                            }`}
+                          >
+                            {dir === "in" ? "Zoom In" : "Zoom Out"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Color Mode for Tunnel */}
+                  <div className="border-t border-slate-800 pt-3">
+                    <Label className="text-amber-400 mb-2 block text-xs font-medium">Color Mode</Label>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {[
+                        { label: "Single", value: "single" },
+                        { label: "Gradient", value: "gradient" },
+                        { label: "Rainbow", value: "rainbow" },
+                      ].map((mode) => (
+                        <button
+                          key={mode.value}
+                          onClick={() => setColorMode(mode.value as ColorMode)}
+                          className={`px-2 py-1.5 rounded-md text-xs transition-colors ${
+                            colorMode === mode.value
+                              ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                              : "bg-slate-800/50 text-slate-400 border border-slate-700"
+                          }`}
+                        >
+                          {mode.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Single color picker */}
+                  {colorMode === "single" && (
+                    <div className="space-y-1">
+                      <Label className="text-xs">Line Color</Label>
+                      <Input
+                        type="color"
+                        value={primaryColor}
+                        onChange={(e) => setPrimaryColor(e.target.value)}
+                        className="h-8 w-full cursor-pointer p-1"
+                      />
+                    </div>
+                  )}
+
+                  {/* Gradient color pickers */}
+                  {colorMode === "gradient" && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Gradient Colors</Label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {gradientColors.map((color, i) => (
+                          <Input
+                            key={i}
+                            type="color"
+                            value={color}
+                            onChange={(e) => {
+                              const newColors = [...gradientColors];
+                              newColors[i] = e.target.value;
+                              setGradientColors(newColors);
+                            }}
+                            className="h-8 w-full cursor-pointer p-1"
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Rainbow settings for Tunnel */}
+                  {colorMode === "rainbow" && (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-xs">Hue Start</Label>
+                            <span className="text-xs text-slate-400">{hueStart}°</span>
+                          </div>
+                          <Slider
+                            value={[hueStart]}
+                            onValueChange={([v]) => setHueStart(v)}
+                            min={0}
+                            max={360}
+                            step={5}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-xs">Hue End</Label>
+                            <span className="text-xs text-slate-400">{hueEnd}°</span>
+                          </div>
+                          <Slider
+                            value={[hueEnd]}
+                            onValueChange={([v]) => setHueEnd(v)}
+                            min={0}
+                            max={360}
+                            step={5}
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-xs">Saturation</Label>
+                            <span className="text-xs text-slate-400">{saturation}%</span>
+                          </div>
+                          <Slider
+                            value={[saturation]}
+                            onValueChange={([v]) => setSaturation(v)}
+                            min={0}
+                            max={100}
+                            step={5}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-xs">Lightness</Label>
+                            <span className="text-xs text-slate-400">{lightness}%</span>
+                          </div>
+                          <Slider
+                            value={[lightness]}
+                            onValueChange={([v]) => setLightness(v)}
+                            min={20}
+                            max={80}
+                            step={5}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setRainbowAnimate(!rainbowAnimate)}
+                          className={`flex-1 px-2 py-1.5 rounded-md text-xs transition-colors ${
+                            rainbowAnimate
+                              ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                              : "bg-slate-800/50 text-slate-400 border border-slate-700"
+                          }`}
+                        >
+                          Animate Hue
+                        </button>
+                        {rainbowAnimate && (
+                          <div className="flex-1 space-y-1">
+                            <Slider
+                              value={[rainbowSpeed]}
+                              onValueChange={([v]) => setRainbowSpeed(v)}
+                              min={0.1}
+                              max={3}
+                              step={0.1}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Glow controls */}
+                  <div className="border-t border-slate-800 pt-3">
+                    <Label className="text-amber-400 mb-2 block text-xs font-medium">Glow Effect</Label>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setEnableGlow(!enableGlow)}
+                        className={`px-3 py-1.5 rounded-md text-xs transition-colors ${
+                          enableGlow
+                            ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                            : "bg-slate-800/50 text-slate-400 border border-slate-700"
+                        }`}
+                      >
+                        {enableGlow ? "Enabled" : "Disabled"}
+                      </button>
+                      {enableGlow && (
+                        <div className="flex-1 space-y-1">
+                          <Slider
+                            value={[glowIntensity]}
+                            onValueChange={([v]) => setGlowIntensity(v)}
+                            min={0.3}
+                            max={2}
+                            step={0.1}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Mesh Gradient controls */}
+                  <div className="border-t border-slate-800 pt-3">
+                    <Label className="text-amber-400 mb-2 block text-xs font-medium">Mesh Gradient Background</Label>
+                    <button
+                      onClick={() => setEnableMeshGradient(!enableMeshGradient)}
+                      className={`w-full px-3 py-1.5 rounded-md text-xs transition-colors ${
+                        enableMeshGradient
+                          ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                          : "bg-slate-800/50 text-slate-400 border border-slate-700"
+                      }`}
+                    >
+                      {enableMeshGradient ? "Enabled" : "Disabled"}
+                    </button>
+                    {enableMeshGradient && (
+                      <div className="mt-2 grid grid-cols-3 gap-2">
+                        {meshColors.map((color, i) => (
+                          <Input
+                            key={i}
+                            type="color"
+                            value={color}
+                            onChange={(e) => {
+                              const newColors = [...meshColors];
+                              newColors[i] = e.target.value;
+                              setMeshColors(newColors);
+                            }}
+                            className="h-8 w-full cursor-pointer p-1"
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
 
@@ -555,9 +1118,44 @@ export default function Home() {
               )}
 
               {/* Color controls */}
-              <div className="grid grid-cols-3 gap-2">
+              {type !== "tunnel" && (
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Background</Label>
+                    <Input
+                      type="color"
+                      value={backgroundColor}
+                      onChange={(e) => setBackgroundColor(e.target.value)}
+                      className="h-8 w-full cursor-pointer p-1"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">{type === "wavefield" ? "Line" : "Primary"}</Label>
+                    <Input
+                      type="color"
+                      value={primaryColor}
+                      onChange={(e) => setPrimaryColor(e.target.value)}
+                      className="h-8 w-full cursor-pointer p-1"
+                    />
+                  </div>
+                  {type !== "wavefield" && (
+                    <div className="space-y-1">
+                      <Label className="text-xs">Accent</Label>
+                      <Input
+                        type="color"
+                        value={accentColor}
+                        onChange={(e) => setAccentColor(e.target.value)}
+                        className="h-8 w-full cursor-pointer p-1"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Background color for Tunnel */}
+              {type === "tunnel" && (
                 <div className="space-y-1">
-                  <Label className="text-xs">Background</Label>
+                  <Label className="text-xs">Background Color</Label>
                   <Input
                     type="color"
                     value={backgroundColor}
@@ -565,27 +1163,7 @@ export default function Home() {
                     className="h-8 w-full cursor-pointer p-1"
                   />
                 </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">{type === "wavefield" ? "Line" : "Primary"}</Label>
-                  <Input
-                    type="color"
-                    value={primaryColor}
-                    onChange={(e) => setPrimaryColor(e.target.value)}
-                    className="h-8 w-full cursor-pointer p-1"
-                  />
-                </div>
-                {type !== "wavefield" && (
-                  <div className="space-y-1">
-                    <Label className="text-xs">Accent</Label>
-                    <Input
-                      type="color"
-                      value={accentColor}
-                      onChange={(e) => setAccentColor(e.target.value)}
-                      className="h-8 w-full cursor-pointer p-1"
-                    />
-                  </div>
-                )}
-              </div>
+              )}
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -679,8 +1257,33 @@ export default function Home() {
                 </div>
               )}
 
+              {/* Visual Effects for tunnel */}
+              {type === "tunnel" && (
+                <div className="border-t border-slate-800 pt-3">
+                  <Label className="text-amber-400 mb-2 block text-xs font-medium">Effects</Label>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {[
+                      { label: "Noise", value: enableNoise, setter: setEnableNoise },
+                      { label: "Vignette", value: enableVignette, setter: setEnableVignette },
+                    ].map((effect) => (
+                      <button
+                        key={effect.label}
+                        onClick={() => effect.setter(!effect.value)}
+                        className={`px-2 py-1.5 rounded-md text-xs transition-colors ${
+                          effect.value
+                            ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                            : "bg-slate-800/50 text-slate-400 border border-slate-700"
+                        }`}
+                      >
+                        {effect.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Seed control */}
-              {(type === "geometric" || type === "wavefield") && (
+              {(type === "geometric" || type === "wavefield" || type === "tunnel") && (
                 <div className="flex items-center gap-2">
                   <div className="flex-1 space-y-1">
                     <Label className="text-xs">Seed</Label>

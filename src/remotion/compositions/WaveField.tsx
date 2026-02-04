@@ -6,8 +6,10 @@ import {
   interpolate,
 } from "remotion";
 import { Noise, Vignette } from "../components/effects";
+import { getRainbowColor, RainbowConfig, defaultRainbowConfig } from "../utils/colors";
 
 type FieldPattern = "waves" | "spiral" | "vortex" | "terrain" | "ripple" | "fabric";
+type ColorMode = "single" | "rainbow";
 
 interface WaveFieldProps {
   backgroundColor: string;
@@ -23,6 +25,9 @@ interface WaveFieldProps {
   enableNoise: boolean;
   enableVignette: boolean;
   seed: number;
+  // Rainbow color support
+  colorMode?: ColorMode;
+  rainbowConfig?: RainbowConfig;
 }
 
 const seededRandom = (seed: number) => {
@@ -44,6 +49,8 @@ export const WaveField: React.FC<WaveFieldProps> = ({
   enableNoise = true,
   enableVignette = true,
   seed = 42,
+  colorMode = "single",
+  rainbowConfig = defaultRainbowConfig,
 }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
@@ -53,7 +60,7 @@ export const WaveField: React.FC<WaveFieldProps> = ({
 
   // Generate line field based on pattern
   const lines = useMemo(() => {
-    const result: { points: { x: number; y: number }[]; opacity: number }[] = [];
+    const result: { points: { x: number; y: number }[]; opacity: number; index: number }[] = [];
 
     switch (pattern) {
       case "waves": {
@@ -81,6 +88,7 @@ export const WaveField: React.FC<WaveFieldProps> = ({
           result.push({
             points,
             opacity: interpolate(zDepth, [0, 0.3, 1], [0.1, 0.6, 1]),
+            index: i,
           });
         }
         break;
@@ -114,6 +122,7 @@ export const WaveField: React.FC<WaveFieldProps> = ({
           result.push({
             points,
             opacity: 0.4 + seededRandom(seed + i) * 0.6,
+            index: i,
           });
         }
         break;
@@ -153,6 +162,7 @@ export const WaveField: React.FC<WaveFieldProps> = ({
           result.push({
             points,
             opacity: interpolate(radiusNorm, [0, 0.5, 1], [0.3, 0.8, 0.5]),
+            index: i,
           });
         }
         break;
@@ -186,6 +196,7 @@ export const WaveField: React.FC<WaveFieldProps> = ({
           result.push({
             points,
             opacity: interpolate(zDepth, [0, 0.5, 1], [1, 0.6, 0.2]),
+            index: i,
           });
         }
         break;
@@ -221,6 +232,7 @@ export const WaveField: React.FC<WaveFieldProps> = ({
           result.push({
             points,
             opacity: fadeIn * fadeOut * 0.8,
+            index: i,
           });
         }
         break;
@@ -243,7 +255,7 @@ export const WaveField: React.FC<WaveFieldProps> = ({
             points.push({ x, y });
           }
 
-          result.push({ points, opacity: 0.6 });
+          result.push({ points, opacity: 0.6, index: i });
         }
 
         // Vertical waves
@@ -261,7 +273,7 @@ export const WaveField: React.FC<WaveFieldProps> = ({
             points.push({ x, y });
           }
 
-          result.push({ points, opacity: 0.6 });
+          result.push({ points, opacity: 0.6, index: i + lineCount / 2 });
         }
         break;
       }
@@ -281,8 +293,8 @@ export const WaveField: React.FC<WaveFieldProps> = ({
   };
 
   // Dashed line pattern based on pattern type
-  const getDashArray = (pattern: FieldPattern, index: number): string => {
-    switch (pattern) {
+  const getDashArray = (patternType: FieldPattern, index: number): string => {
+    switch (patternType) {
       case "vortex":
         return `${4 + seededRandom(seed + index) * 8},${2 + seededRandom(seed + index + 100) * 6}`;
       case "spiral":
@@ -292,6 +304,14 @@ export const WaveField: React.FC<WaveFieldProps> = ({
       default:
         return "none";
     }
+  };
+
+  // Get stroke color for a line
+  const getStrokeColor = (lineIndex: number, totalLines: number): string => {
+    if (colorMode === "rainbow") {
+      return getRainbowColor(lineIndex, totalLines, rainbowConfig, frame, fps);
+    }
+    return lineColor;
   };
 
   return (
@@ -306,7 +326,7 @@ export const WaveField: React.FC<WaveFieldProps> = ({
             key={i}
             d={createPath(line.points)}
             fill="none"
-            stroke={lineColor}
+            stroke={getStrokeColor(line.index, lines.length)}
             strokeWidth={pattern === "terrain" ? 1.5 : 1}
             strokeLinecap="round"
             strokeDasharray={getDashArray(pattern, i)}
