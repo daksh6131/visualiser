@@ -72,6 +72,10 @@ const fragmentShaderSource = `
     return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
   }
 
+  vec2 hash2(vec2 p) {
+    return fract(sin(vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)))) * 43758.5453);
+  }
+
   float noise(vec2 p) {
     vec2 i = floor(p);
     vec2 f = fract(p);
@@ -102,7 +106,7 @@ const fragmentShaderSource = `
     for (int j = -1; j <= 1; j++) {
       for (int i = -1; i <= 1; i++) {
         vec2 neighbor = vec2(float(i), float(j));
-        vec2 point = hash(n + neighbor + u_seed) + 0.5 * sin(u_time * 0.5 + TAU * hash(n + neighbor));
+        vec2 point = hash2(n + neighbor + u_seed) + 0.5 * sin(u_time * 0.5 + TAU * hash2(n + neighbor));
         point = 0.5 + 0.5 * sin(u_time * 0.3 + TAU * point);
         vec2 diff = neighbor + point - f;
         float dist = length(diff);
