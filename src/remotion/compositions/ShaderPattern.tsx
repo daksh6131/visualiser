@@ -1,0 +1,670 @@
+import React, { useEffect, useRef } from "react";
+import {
+  AbsoluteFill,
+  useCurrentFrame,
+  useVideoConfig,
+} from "remotion";
+
+type ShaderPatternType =
+  | "hypnotic"
+  | "voronoi"
+  | "kaleidoscope"
+  | "plasma"
+  | "tunnel"
+  | "fractal"
+  | "moire"
+  | "waves";
+
+interface ShaderPatternProps {
+  pattern: ShaderPatternType;
+  speed: number;
+  complexity: number;
+  colorA: string;
+  colorB: string;
+  colorC: string;
+  symmetry: number;
+  zoom: number;
+  rotation: number;
+  enableNoise: boolean;
+  seed: number;
+}
+
+// Convert hex to RGB normalized
+const hexToRgb = (hex: string): [number, number, number] => {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result
+    ? [
+        parseInt(result[1], 16) / 255,
+        parseInt(result[2], 16) / 255,
+        parseInt(result[3], 16) / 255,
+      ]
+    : [1, 1, 1];
+};
+
+// Vertex shader - simple passthrough
+const vertexShaderSource = `
+  attribute vec2 a_position;
+  varying vec2 v_uv;
+
+  void main() {
+    v_uv = a_position * 0.5 + 0.5;
+    gl_Position = vec4(a_position, 0.0, 1.0);
+  }
+`;
+
+// Fragment shader with multiple pattern options
+const fragmentShaderSource = `
+  precision highp float;
+
+  varying vec2 v_uv;
+
+  uniform float u_time;
+  uniform vec2 u_resolution;
+  uniform int u_pattern;
+  uniform float u_speed;
+  uniform float u_complexity;
+  uniform vec3 u_colorA;
+  uniform vec3 u_colorB;
+  uniform vec3 u_colorC;
+  uniform float u_symmetry;
+  uniform float u_zoom;
+  uniform float u_rotation;
+  uniform float u_seed;
+  uniform bool u_noise;
+
+  #define PI 3.14159265359
+  #define TAU 6.28318530718
+  #define PHI 1.61803398875
+
+  // === NOISE FUNCTIONS ===
+
+  // Hash function
+  float hash(vec2 p) {
+    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+  }
+
+  // 2D noise
+  float noise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+
+    float a = hash(i);
+    float b = hash(i + vec2(1.0, 0.0));
+    float c = hash(i + vec2(0.0, 1.0));
+    float d = hash(i + vec2(1.0, 1.0));
+
+    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+  }
+
+  // FBM
+  float fbm(vec2 p, int octaves) {
+    float value = 0.0;
+    float amplitude = 0.5;
+    float frequency = 1.0;
+
+    for (int i = 0; i < 6; i++) {
+      if (i >= octaves) break;
+      value += amplitude * noise(p * frequency);
+      amplitude *= 0.5;
+      frequency *= 2.0;
+    }
+
+    return value;
+  }
+
+  // Voronoi distance
+  vec2 voronoi(vec2 p) {
+    vec2 n = floor(p);
+    vec2 f = fract(p);
+
+    float minDist = 1.0;
+    vec2 minPoint = vec2(0.0);
+
+    for (int j = -1; j <= 1; j++) {
+      for (int i = -1; i <= 1; i++) {
+        vec2 neighbor = vec2(float(i), float(j));
+        vec2 point = hash(n + neighbor + u_seed) + 0.5 * sin(u_time * 0.5 + TAU * hash(n + neighbor));
+        point = 0.5 + 0.5 * sin(u_time * 0.3 + TAU * point);
+
+        vec2 diff = neighbor + point - f;
+        float dist = length(diff);
+
+        if (dist < minDist) {
+          minDist = dist;
+          minPoint = point;
+        }
+      }
+    }
+
+    return vec2(minDist, hash(minPoint));
+  }
+
+  // Rotation matrix
+  mat2 rot(float a) {
+    float c = cos(a), s = sin(a);
+    return mat2(c, -s, s, c);
+  }
+
+  // Smoothstep easing
+  float ease(float t) {
+    return t * t * (3.0 - 2.0 * t);
+  }
+
+  // === PATTERN FUNCTIONS ===
+
+  // Hypnotic concentric pattern with symmetry
+  vec3 hypnoticPattern(vec2 uv) {
+    vec2 p = uv - 0.5;
+    p *= u_zoom;
+    p *= rot(u_rotation + u_time * 0.1 * u_speed);
+
+    float r = length(p);
+    float a = atan(p.y, p.x);
+
+    // Apply symmetry
+    float sym = floor(u_symmetry + 0.5);
+    if (sym > 1.0) {
+      a = mod(a + PI, TAU / sym) - PI / sym;
+      a = abs(a);
+    }
+
+    // Create layered rings
+    float rings = sin(r * 20.0 * u_complexity - u_time * 2.0 * u_speed);
+    float spiral = sin(a * sym + r * 10.0 - u_time * u_speed);
+    float pattern = rings * 0.5 + spiral * 0.5;
+
+    // Add secondary pattern
+    float secondary = sin(r * 30.0 * u_complexity + a * sym * 2.0 + u_time * u_speed);
+    pattern = mix(pattern, secondary, 0.3);
+
+    pattern = ease((pattern + 1.0) * 0.5);
+
+    // Three-color gradient
+    vec3 color;
+    if (pattern < 0.5) {
+      color = mix(u_colorA, u_colorB, pattern * 2.0);
+    } else {
+      color = mix(u_colorB, u_colorC, (pattern - 0.5) * 2.0);
+    }
+
+    return color;
+  }
+
+  // Voronoi cellular pattern
+  vec3 voronoiPattern(vec2 uv) {
+    vec2 p = (uv - 0.5) * u_zoom * 5.0;
+    p *= rot(u_rotation + u_time * 0.05 * u_speed);
+
+    // Apply symmetry
+    float a = atan(p.y, p.x);
+    float r = length(p);
+    float sym = floor(u_symmetry + 0.5);
+    if (sym > 1.0) {
+      a = mod(a + PI, TAU / sym) - PI / sym;
+      p = vec2(cos(a), sin(a)) * r;
+    }
+
+    vec2 v = voronoi(p * u_complexity);
+
+    float pattern = v.x;
+    pattern = ease(pattern);
+
+    // Animate color based on cell ID
+    float colorShift = v.y + u_time * 0.1 * u_speed;
+
+    vec3 color;
+    float t = fract(colorShift);
+    if (t < 0.333) {
+      color = mix(u_colorA, u_colorB, t * 3.0);
+    } else if (t < 0.666) {
+      color = mix(u_colorB, u_colorC, (t - 0.333) * 3.0);
+    } else {
+      color = mix(u_colorC, u_colorA, (t - 0.666) * 3.0);
+    }
+
+    // Edge highlighting
+    float edge = smoothstep(0.0, 0.1, pattern);
+    color = mix(u_colorA * 0.2, color, edge);
+
+    return color;
+  }
+
+  // Kaleidoscope pattern
+  vec3 kaleidoscopePattern(vec2 uv) {
+    vec2 p = uv - 0.5;
+    p *= u_zoom;
+    p *= rot(u_rotation);
+
+    float r = length(p);
+    float a = atan(p.y, p.x);
+
+    // Kaleidoscope folding
+    float sym = max(3.0, floor(u_symmetry + 0.5));
+    float segment = TAU / sym;
+    a = mod(a + PI, segment);
+    a = abs(a - segment * 0.5);
+
+    // Reconstruct position
+    p = vec2(cos(a), sin(a)) * r;
+
+    // Animated pattern
+    float t = u_time * u_speed;
+    float pattern = 0.0;
+
+    // Multiple layers
+    for (float i = 1.0; i <= 4.0; i++) {
+      vec2 q = p * (i * u_complexity);
+      q += vec2(sin(t * 0.5 + i), cos(t * 0.3 + i)) * 0.2;
+      pattern += sin(q.x * 10.0 + t) * cos(q.y * 10.0 - t * 0.7) / i;
+    }
+
+    pattern = ease((pattern + 2.0) / 4.0);
+
+    vec3 color;
+    if (pattern < 0.5) {
+      color = mix(u_colorA, u_colorB, pattern * 2.0);
+    } else {
+      color = mix(u_colorB, u_colorC, (pattern - 0.5) * 2.0);
+    }
+
+    return color;
+  }
+
+  // Plasma pattern with Perlin-like noise
+  vec3 plasmaPattern(vec2 uv) {
+    vec2 p = (uv - 0.5) * u_zoom * 4.0;
+    p *= rot(u_rotation + u_time * 0.02 * u_speed);
+
+    float t = u_time * u_speed;
+
+    // Multiple sine waves
+    float v = 0.0;
+    v += sin(p.x * u_complexity + t);
+    v += sin(p.y * u_complexity * PHI + t * 0.7);
+    v += sin((p.x + p.y) * u_complexity * 0.5 + t * 0.5);
+    v += sin(length(p) * u_complexity * 2.0 - t);
+
+    // Add FBM noise
+    if (u_noise) {
+      v += fbm(p + t * 0.2, 4) * 2.0;
+    }
+
+    v = (v + 5.0) / 10.0;
+    v = ease(v);
+
+    // Smooth color transitions
+    float colorT = fract(v + t * 0.1);
+    vec3 color;
+    if (colorT < 0.333) {
+      color = mix(u_colorA, u_colorB, colorT * 3.0);
+    } else if (colorT < 0.666) {
+      color = mix(u_colorB, u_colorC, (colorT - 0.333) * 3.0);
+    } else {
+      color = mix(u_colorC, u_colorA, (colorT - 0.666) * 3.0);
+    }
+
+    return color;
+  }
+
+  // Tunnel zoom pattern
+  vec3 tunnelPattern(vec2 uv) {
+    vec2 p = uv - 0.5;
+    p *= rot(u_rotation);
+
+    float r = length(p);
+    float a = atan(p.y, p.x);
+
+    // Tunnel coordinates
+    float depth = 1.0 / (r + 0.1) * u_zoom;
+    float tunnelA = a;
+
+    // Apply symmetry
+    float sym = floor(u_symmetry + 0.5);
+    if (sym > 1.0) {
+      tunnelA = mod(tunnelA + PI, TAU / sym) - PI / sym;
+    }
+
+    // Animated tunnel
+    float t = u_time * u_speed;
+    depth += t * 2.0;
+    tunnelA += t * 0.2;
+
+    // Pattern in tunnel space
+    float pattern = sin(depth * u_complexity * 5.0) * 0.5 + 0.5;
+    pattern *= sin(tunnelA * sym * 2.0 + depth * 0.5) * 0.5 + 0.5;
+
+    // Radial fade
+    float fade = smoothstep(0.0, 0.3, r);
+    pattern *= fade;
+
+    pattern = ease(pattern);
+
+    vec3 color;
+    if (pattern < 0.5) {
+      color = mix(u_colorA, u_colorB, pattern * 2.0);
+    } else {
+      color = mix(u_colorB, u_colorC, (pattern - 0.5) * 2.0);
+    }
+
+    // Center glow
+    color += u_colorC * (1.0 - fade) * 0.5;
+
+    return color;
+  }
+
+  // Fractal-like pattern
+  vec3 fractalPattern(vec2 uv) {
+    vec2 p = (uv - 0.5) * u_zoom * 3.0;
+    p *= rot(u_rotation + u_time * 0.05 * u_speed);
+
+    float t = u_time * u_speed;
+
+    // Julia set inspired iteration
+    vec2 z = p;
+    vec2 c = vec2(
+      sin(t * 0.1) * 0.4,
+      cos(t * 0.13) * 0.4
+    );
+
+    float iter = 0.0;
+    for (int i = 0; i < 20; i++) {
+      if (length(z) > 2.0) break;
+
+      // z = z^2 + c
+      z = vec2(z.x * z.x - z.y * z.y, 2.0 * z.x * z.y) + c;
+      iter += 1.0;
+    }
+
+    float pattern = iter / 20.0;
+    pattern = ease(pattern);
+
+    // Apply symmetry post-process
+    float a = atan(p.y, p.x);
+    float sym = floor(u_symmetry + 0.5);
+    float symPattern = sin(a * sym + pattern * TAU + t) * 0.5 + 0.5;
+    pattern = mix(pattern, symPattern, 0.3);
+
+    vec3 color;
+    if (pattern < 0.5) {
+      color = mix(u_colorA, u_colorB, pattern * 2.0);
+    } else {
+      color = mix(u_colorB, u_colorC, (pattern - 0.5) * 2.0);
+    }
+
+    return color;
+  }
+
+  // Moiré interference pattern
+  vec3 moirePattern(vec2 uv) {
+    vec2 p = uv - 0.5;
+    p *= u_zoom;
+
+    float t = u_time * u_speed;
+
+    // Multiple offset centers
+    vec2 c1 = vec2(sin(t * 0.3) * 0.2, cos(t * 0.2) * 0.2);
+    vec2 c2 = vec2(sin(t * 0.4 + 2.0) * 0.2, cos(t * 0.3 + 1.0) * 0.2);
+    vec2 c3 = vec2(sin(t * 0.2 + 4.0) * 0.2, cos(t * 0.4 + 3.0) * 0.2);
+
+    // Concentric rings from each center
+    float freq = u_complexity * 30.0;
+    float r1 = sin(length(p - c1) * freq);
+    float r2 = sin(length(p - c2) * freq);
+    float r3 = sin(length(p - c3) * freq);
+
+    // Interference
+    float pattern = (r1 + r2 + r3) / 3.0;
+
+    // Apply symmetry
+    float a = atan(p.y, p.x);
+    float sym = floor(u_symmetry + 0.5);
+    if (sym > 1.0) {
+      float symRings = sin(length(p) * freq + a * sym);
+      pattern = (pattern + symRings) * 0.5;
+    }
+
+    pattern = ease((pattern + 1.0) * 0.5);
+
+    vec3 color;
+    if (pattern < 0.5) {
+      color = mix(u_colorA, u_colorB, pattern * 2.0);
+    } else {
+      color = mix(u_colorB, u_colorC, (pattern - 0.5) * 2.0);
+    }
+
+    return color;
+  }
+
+  // Wave interference pattern
+  vec3 wavesPattern(vec2 uv) {
+    vec2 p = (uv - 0.5) * u_zoom * 4.0;
+    p *= rot(u_rotation);
+
+    float t = u_time * u_speed;
+
+    // Apply symmetry
+    float a = atan(p.y, p.x);
+    float r = length(p);
+    float sym = floor(u_symmetry + 0.5);
+    if (sym > 1.0) {
+      a = mod(a + PI, TAU / sym) - PI / sym;
+      a = abs(a);
+      p = vec2(cos(a), sin(a)) * r;
+    }
+
+    // Multiple wave sources
+    float pattern = 0.0;
+    for (float i = 0.0; i < 5.0; i++) {
+      float angle = i * TAU / 5.0 + t * 0.1;
+      vec2 dir = vec2(cos(angle), sin(angle));
+      pattern += sin(dot(p, dir) * u_complexity * 5.0 + t * (1.0 + i * 0.2));
+    }
+
+    // Radial wave
+    pattern += sin(r * u_complexity * 8.0 - t * 2.0);
+
+    pattern = (pattern + 6.0) / 12.0;
+    pattern = ease(pattern);
+
+    vec3 color;
+    if (pattern < 0.5) {
+      color = mix(u_colorA, u_colorB, pattern * 2.0);
+    } else {
+      color = mix(u_colorB, u_colorC, (pattern - 0.5) * 2.0);
+    }
+
+    return color;
+  }
+
+  void main() {
+    vec2 uv = v_uv;
+    uv.x *= u_resolution.x / u_resolution.y; // Aspect ratio correction
+
+    vec3 color;
+
+    if (u_pattern == 0) {
+      color = hypnoticPattern(uv);
+    } else if (u_pattern == 1) {
+      color = voronoiPattern(uv);
+    } else if (u_pattern == 2) {
+      color = kaleidoscopePattern(uv);
+    } else if (u_pattern == 3) {
+      color = plasmaPattern(uv);
+    } else if (u_pattern == 4) {
+      color = tunnelPattern(uv);
+    } else if (u_pattern == 5) {
+      color = fractalPattern(uv);
+    } else if (u_pattern == 6) {
+      color = moirePattern(uv);
+    } else {
+      color = wavesPattern(uv);
+    }
+
+    // Add subtle film grain if noise enabled
+    if (u_noise) {
+      float grain = hash(uv * 1000.0 + u_time) * 0.05;
+      color += grain - 0.025;
+    }
+
+    // Vignette
+    float vignette = 1.0 - length(v_uv - 0.5) * 0.5;
+    color *= vignette;
+
+    gl_FragColor = vec4(color, 1.0);
+  }
+`;
+
+const patternIndexMap: Record<ShaderPatternType, number> = {
+  hypnotic: 0,
+  voronoi: 1,
+  kaleidoscope: 2,
+  plasma: 3,
+  tunnel: 4,
+  fractal: 5,
+  moire: 6,
+  waves: 7,
+};
+
+export const ShaderPattern: React.FC<ShaderPatternProps> = ({
+  pattern = "hypnotic",
+  speed = 1,
+  complexity = 1,
+  colorA = "#00ffff",
+  colorB = "#ff0066",
+  colorC = "#000000",
+  symmetry = 3,
+  zoom = 1,
+  rotation = 0,
+  enableNoise = false,
+  seed = 42,
+}) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const glRef = useRef<WebGLRenderingContext | null>(null);
+  const programRef = useRef<WebGLProgram | null>(null);
+  const frameRef = useRef(0);
+
+  const frame = useCurrentFrame();
+  const { fps, width, height } = useVideoConfig();
+  const time = frame / fps;
+
+  // Initialize WebGL
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const gl = canvas.getContext("webgl", { preserveDrawingBuffer: true });
+    if (!gl) {
+      console.error("WebGL not supported");
+      return;
+    }
+
+    glRef.current = gl;
+
+    // Compile shaders
+    const vertexShader = gl.createShader(gl.VERTEX_SHADER)!;
+    gl.shaderSource(vertexShader, vertexShaderSource);
+    gl.compileShader(vertexShader);
+
+    if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
+      console.error("Vertex shader error:", gl.getShaderInfoLog(vertexShader));
+      return;
+    }
+
+    const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER)!;
+    gl.shaderSource(fragmentShader, fragmentShaderSource);
+    gl.compileShader(fragmentShader);
+
+    if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
+      console.error("Fragment shader error:", gl.getShaderInfoLog(fragmentShader));
+      return;
+    }
+
+    // Create program
+    const program = gl.createProgram()!;
+    gl.attachShader(program, vertexShader);
+    gl.attachShader(program, fragmentShader);
+    gl.linkProgram(program);
+
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      console.error("Program link error:", gl.getProgramInfoLog(program));
+      return;
+    }
+
+    programRef.current = program;
+
+    // Create fullscreen quad
+    const positions = new Float32Array([
+      -1, -1,
+       1, -1,
+      -1,  1,
+       1,  1,
+    ]);
+
+    const buffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+
+    const positionLocation = gl.getAttribLocation(program, "a_position");
+    gl.enableVertexAttribArray(positionLocation);
+    gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+
+    return () => {
+      gl.deleteProgram(program);
+      gl.deleteShader(vertexShader);
+      gl.deleteShader(fragmentShader);
+    };
+  }, []);
+
+  // Render frame
+  useEffect(() => {
+    const gl = glRef.current;
+    const program = programRef.current;
+    const canvas = canvasRef.current;
+
+    if (!gl || !program || !canvas) return;
+
+    // Resize canvas if needed
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+      gl.viewport(0, 0, width, height);
+    }
+
+    gl.useProgram(program);
+
+    // Set uniforms
+    gl.uniform1f(gl.getUniformLocation(program, "u_time"), time * speed);
+    gl.uniform2f(gl.getUniformLocation(program, "u_resolution"), width, height);
+    gl.uniform1i(gl.getUniformLocation(program, "u_pattern"), patternIndexMap[pattern]);
+    gl.uniform1f(gl.getUniformLocation(program, "u_speed"), speed);
+    gl.uniform1f(gl.getUniformLocation(program, "u_complexity"), complexity);
+    gl.uniform3fv(gl.getUniformLocation(program, "u_colorA"), hexToRgb(colorA));
+    gl.uniform3fv(gl.getUniformLocation(program, "u_colorB"), hexToRgb(colorB));
+    gl.uniform3fv(gl.getUniformLocation(program, "u_colorC"), hexToRgb(colorC));
+    gl.uniform1f(gl.getUniformLocation(program, "u_symmetry"), symmetry);
+    gl.uniform1f(gl.getUniformLocation(program, "u_zoom"), zoom);
+    gl.uniform1f(gl.getUniformLocation(program, "u_rotation"), rotation * Math.PI / 180);
+    gl.uniform1f(gl.getUniformLocation(program, "u_seed"), seed);
+    gl.uniform1i(gl.getUniformLocation(program, "u_noise"), enableNoise ? 1 : 0);
+
+    // Draw
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+    frameRef.current = frame;
+  }, [frame, time, pattern, speed, complexity, colorA, colorB, colorC, symmetry, zoom, rotation, enableNoise, seed, width, height]);
+
+  return (
+    <AbsoluteFill style={{ backgroundColor: "#000" }}>
+      <canvas
+        ref={canvasRef}
+        style={{
+          width: "100%",
+          height: "100%",
+        }}
+      />
+    </AbsoluteFill>
+  );
+};
+
+export default ShaderPattern;

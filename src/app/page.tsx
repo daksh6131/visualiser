@@ -18,6 +18,8 @@ import { EnhancedGeometric } from "@/remotion/compositions/EnhancedGeometric";
 import { AsciiAnimation } from "@/remotion/compositions/AsciiAnimation";
 import { WaveField } from "@/remotion/compositions/WaveField";
 import { TunnelZoom } from "@/remotion/compositions/TunnelZoom";
+import { ShaderPattern } from "@/remotion/compositions/ShaderPattern";
+import { ShaderCanvas } from "@/components/ShaderCanvas";
 import { defaultRainbowConfig } from "@/remotion/utils/colors";
 
 // Reusable slider with input component
@@ -98,6 +100,17 @@ const tunnelPatternTypes = [
   { value: "starburst", label: "Starburst" },
 ];
 
+const shaderPatterns = [
+  { value: "hypnotic", label: "Hypnotic" },
+  { value: "voronoi", label: "Voronoi" },
+  { value: "kaleidoscope", label: "Kaleidoscope" },
+  { value: "plasma", label: "Plasma" },
+  { value: "tunnel", label: "Tunnel" },
+  { value: "fractal", label: "Fractal" },
+  { value: "moire", label: "Moiré" },
+  { value: "waves", label: "Waves" },
+];
+
 const geometricShapes = [
   { value: "hexagon", label: "Hexagon" },
   { value: "triangle", label: "Triangle" },
@@ -117,10 +130,10 @@ const motionPatterns = [
   { value: "pulse", label: "Pulse" },
 ];
 
-type AnimationType = "geometric" | "wavefield" | "ascii" | "tunnel";
+type AnimationType = "geometric" | "wavefield" | "ascii" | "tunnel" | "shader";
 
 export default function Home() {
-  const [type, setType] = useState<AnimationType>("ascii");
+  const [type, setType] = useState<AnimationType>("shader");
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Shared
@@ -173,6 +186,17 @@ export default function Home() {
   const [accentColor, setAccentColor] = useState("#ec4899");
   const [bgColor, setBgColor] = useState("#0a1628");
 
+  // Shader
+  const [shaderPattern, setShaderPattern] = useState("hypnotic");
+  const [shaderSpeed, setShaderSpeed] = useState(1);
+  const [shaderComplexity, setShaderComplexity] = useState(1);
+  const [shaderColorA, setShaderColorA] = useState("#00ffff");
+  const [shaderColorB, setShaderColorB] = useState("#ff0066");
+  const [shaderColorC, setShaderColorC] = useState("#000000");
+  const [shaderSymmetry, setShaderSymmetry] = useState(3);
+  const [shaderZoom, setShaderZoom] = useState(1);
+  const [shaderRotation, setShaderRotation] = useState(0);
+
   // Rainbow config
   const [hueStart, setHueStart] = useState(0);
   const [hueEnd, setHueEnd] = useState(360);
@@ -220,6 +244,18 @@ export default function Home() {
       setShapeCount(1 + Math.floor(Math.random() * 5));
       setMotionPattern(motionPatterns[Math.floor(Math.random() * motionPatterns.length)].value);
       setMotionSpeed(0.5 + Math.random() * 2);
+    } else if (type === "shader") {
+      setShaderPattern(shaderPatterns[Math.floor(Math.random() * shaderPatterns.length)].value);
+      setShaderSpeed(0.5 + Math.random() * 2);
+      setShaderComplexity(0.5 + Math.random() * 2);
+      setShaderSymmetry(2 + Math.floor(Math.random() * 7));
+      setShaderZoom(0.5 + Math.random() * 2);
+      setShaderRotation(Math.random() * 360);
+      // Random colors
+      const randomColor = () => '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0');
+      setShaderColorA(randomColor());
+      setShaderColorB(randomColor());
+      setShaderColorC(randomColor());
     }
 
     // Randomize rainbow
@@ -311,6 +347,20 @@ export default function Home() {
     seed,
   }), [geoShape, shapeCount, motionPattern, motionSpeed, primaryColor, accentColor, bgColor, enableNoise, enableVignette, seed]);
 
+  const shaderProps = useMemo(() => ({
+    pattern: shaderPattern as any,
+    speed: shaderSpeed,
+    complexity: shaderComplexity,
+    colorA: shaderColorA,
+    colorB: shaderColorB,
+    colorC: shaderColorC,
+    symmetry: shaderSymmetry,
+    zoom: shaderZoom,
+    rotation: shaderRotation,
+    enableNoise,
+    seed,
+  }), [shaderPattern, shaderSpeed, shaderComplexity, shaderColorA, shaderColorB, shaderColorC, shaderSymmetry, shaderZoom, shaderRotation, enableNoise, seed]);
+
   return (
     <div className="h-screen w-screen bg-neutral-950 flex flex-col overflow-hidden">
       {/* Video Player */}
@@ -372,6 +422,21 @@ export default function Home() {
               autoPlay
             />
           )}
+          {type === "shader" && (
+            <ShaderCanvas
+              pattern={shaderPattern as any}
+              speed={shaderSpeed}
+              complexity={shaderComplexity}
+              colorA={shaderColorA}
+              colorB={shaderColorB}
+              colorC={shaderColorC}
+              symmetry={shaderSymmetry}
+              zoom={shaderZoom}
+              rotation={shaderRotation}
+              enableNoise={enableNoise}
+              seed={seed}
+            />
+          )}
         </div>
       </div>
 
@@ -406,6 +471,12 @@ export default function Home() {
                   className="text-sm text-neutral-300 data-[state=active]:bg-neutral-700 data-[state=active]:text-white"
                 >
                   Geometric
+                </TabsTrigger>
+                <TabsTrigger
+                  value="shader"
+                  className="text-sm text-neutral-300 data-[state=active]:bg-neutral-700 data-[state=active]:text-white"
+                >
+                  Shader
                 </TabsTrigger>
               </TabsList>
             </Tabs>
@@ -471,6 +542,20 @@ export default function Home() {
                   </SelectContent>
                 </Select>
               )}
+              {type === "shader" && (
+                <Select value={shaderPattern} onValueChange={setShaderPattern}>
+                  <SelectTrigger className="w-32 h-9 text-sm bg-neutral-800 border-neutral-700 text-neutral-200">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-neutral-800 border-neutral-700">
+                    {shaderPatterns.map((s) => (
+                      <SelectItem key={s.value} value={s.value} className="text-sm text-neutral-200">
+                        {s.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
 
             <div className="h-6 w-px bg-neutral-700" />
@@ -478,7 +563,7 @@ export default function Home() {
             {/* Primary Slider with Input */}
             <div className="flex items-center gap-3 min-w-[220px]">
               <Label className="text-sm text-neutral-400 w-12">
-                {type === "ascii" ? "Speed" : type === "wavefield" ? "Lines" : type === "tunnel" ? "Speed" : "Count"}
+                {type === "ascii" ? "Speed" : type === "wavefield" ? "Lines" : type === "tunnel" ? "Speed" : type === "shader" ? "Speed" : "Count"}
               </Label>
               {type === "ascii" && (
                 <>
@@ -572,6 +657,30 @@ export default function Home() {
                     min={1}
                     max={8}
                     step={1}
+                    className="h-7 w-16 text-xs text-right bg-neutral-800 border-neutral-700 text-neutral-200 px-2"
+                  />
+                </>
+              )}
+              {type === "shader" && (
+                <>
+                  <Slider
+                    value={[shaderSpeed]}
+                    onValueChange={([v]) => setShaderSpeed(v)}
+                    min={0.1}
+                    max={3}
+                    step={0.1}
+                    className="flex-1"
+                  />
+                  <Input
+                    type="number"
+                    value={shaderSpeed.toFixed(1)}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value);
+                      if (!isNaN(v)) setShaderSpeed(Math.min(3, Math.max(0.1, v)));
+                    }}
+                    min={0.1}
+                    max={3}
+                    step={0.1}
                     className="h-7 w-16 text-xs text-right bg-neutral-800 border-neutral-700 text-neutral-200 px-2"
                   />
                 </>
@@ -898,6 +1007,72 @@ export default function Home() {
                         type="color"
                         value={bgColor}
                         onChange={(e) => setBgColor(e.target.value)}
+                        className="h-8 w-full p-1 bg-neutral-800 border-neutral-700"
+                      />
+                    </div>
+                  </>
+                )}
+
+                {type === "shader" && (
+                  <>
+                    <SliderWithInput
+                      label="Complexity"
+                      value={shaderComplexity}
+                      onChange={setShaderComplexity}
+                      min={0.2}
+                      max={3}
+                      step={0.1}
+                    />
+                    <SliderWithInput
+                      label="Symmetry"
+                      value={shaderSymmetry}
+                      onChange={setShaderSymmetry}
+                      min={1}
+                      max={12}
+                      step={1}
+                      decimals={0}
+                    />
+                    <SliderWithInput
+                      label="Zoom"
+                      value={shaderZoom}
+                      onChange={setShaderZoom}
+                      min={0.2}
+                      max={4}
+                      step={0.1}
+                    />
+                    <SliderWithInput
+                      label="Rotation"
+                      value={shaderRotation}
+                      onChange={setShaderRotation}
+                      min={0}
+                      max={360}
+                      step={5}
+                      decimals={0}
+                    />
+                    <div className="space-y-2">
+                      <Label className="text-xs text-neutral-400">Color A</Label>
+                      <Input
+                        type="color"
+                        value={shaderColorA}
+                        onChange={(e) => setShaderColorA(e.target.value)}
+                        className="h-8 w-full p-1 bg-neutral-800 border-neutral-700"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs text-neutral-400">Color B</Label>
+                      <Input
+                        type="color"
+                        value={shaderColorB}
+                        onChange={(e) => setShaderColorB(e.target.value)}
+                        className="h-8 w-full p-1 bg-neutral-800 border-neutral-700"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs text-neutral-400">Color C</Label>
+                      <Input
+                        type="color"
+                        value={shaderColorC}
+                        onChange={(e) => setShaderColorC(e.target.value)}
                         className="h-8 w-full p-1 bg-neutral-800 border-neutral-700"
                       />
                     </div>
