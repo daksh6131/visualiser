@@ -150,6 +150,7 @@ const asciiPatterns = [
   { value: "tunnel", label: "Tunnel" },
   { value: "wave", label: "Wave" },
   { value: "spiral", label: "Spiral" },
+  { value: "image", label: "Image" },
 ];
 
 const asciiColorModes = [
@@ -275,6 +276,37 @@ export default function Home() {
   const [autoRotateSpeedX, setAutoRotateSpeedX] = useState(0.5);
   const [autoRotateSpeedY, setAutoRotateSpeedY] = useState(1);
   const [autoRotateSpeedZ, setAutoRotateSpeedZ] = useState(0);
+  // Image-to-ASCII controls
+  const [asciiImageData, setAsciiImageData] = useState<string | undefined>(undefined);
+  const [asciiImageInvert, setAsciiImageInvert] = useState(false);
+  const [asciiImageAnimate, setAsciiImageAnimate] = useState(true);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Handle image upload
+  const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('Please upload an image file');
+      return;
+    }
+
+    // Validate file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Image must be less than 10MB');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const result = event.target?.result as string;
+      setAsciiImageData(result);
+      setAsciiPattern('image'); // Auto-switch to image pattern
+    };
+    reader.readAsDataURL(file);
+  }, []);
 
   // Wave
   const [wavePattern, setWavePattern] = useState("vortex");
@@ -565,6 +597,9 @@ export default function Home() {
               autoRotateSpeedX={autoRotateSpeedX}
               autoRotateSpeedY={autoRotateSpeedY}
               autoRotateSpeedZ={autoRotateSpeedZ}
+              imageData={asciiImageData}
+              imageInvert={asciiImageInvert}
+              imageAnimate={asciiImageAnimate}
             />
           )}
           {type === "wavefield" && (
@@ -1026,6 +1061,66 @@ export default function Home() {
                             />
                           </>
                         )}
+                      </>
+                    )}
+                    {/* Image-to-ASCII Controls */}
+                    {asciiPattern === "image" && (
+                      <>
+                        <div className="col-span-2 md:col-span-4 lg:col-span-6 border-t border-neutral-700 pt-3 mt-2">
+                          <Label className="text-xs text-neutral-300 font-medium">Image to ASCII</Label>
+                        </div>
+                        <div className="col-span-2 space-y-2">
+                          <Label className="text-xs text-neutral-400">Upload Image</Label>
+                          <div className="flex gap-2">
+                            <input
+                              ref={fileInputRef}
+                              type="file"
+                              accept="image/*"
+                              onChange={handleImageUpload}
+                              className="hidden"
+                            />
+                            <Button
+                              onClick={() => fileInputRef.current?.click()}
+                              size="sm"
+                              variant="outline"
+                              className="h-8 text-xs bg-neutral-800 border-neutral-700 text-neutral-300 hover:bg-neutral-700"
+                            >
+                              {asciiImageData ? "Change Image" : "Choose Image"}
+                            </Button>
+                            {asciiImageData && (
+                              <Button
+                                onClick={() => setAsciiImageData(undefined)}
+                                size="sm"
+                                variant="outline"
+                                className="h-8 text-xs bg-red-900/50 border-red-700 text-red-300 hover:bg-red-900"
+                              >
+                                Remove
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-xs text-neutral-400">Invert</Label>
+                          <div className="flex items-center h-8">
+                            <input
+                              type="checkbox"
+                              checked={asciiImageInvert}
+                              onChange={(e) => setAsciiImageInvert(e.target.checked)}
+                              className="rounded border-neutral-700 h-4 w-4"
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-xs text-neutral-400">Animate</Label>
+                          <div className="flex items-center h-8">
+                            <input
+                              type="checkbox"
+                              checked={asciiImageAnimate}
+                              onChange={(e) => setAsciiImageAnimate(e.target.checked)}
+                              className="rounded border-neutral-700 h-4 w-4"
+                            />
+                          </div>
+                        </div>
                       </>
                     )}
                   </>

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 
-type AsciiPattern = "donut" | "matrix" | "cube" | "sphere" | "plasma" | "tunnel" | "wave" | "spiral";
+type AsciiPattern = "donut" | "matrix" | "cube" | "sphere" | "plasma" | "tunnel" | "wave" | "spiral" | "image";
 type ColorMode = "green" | "single" | "rainbow";
 
 interface AsciiCanvasProps {
@@ -23,6 +23,9 @@ interface AsciiCanvasProps {
   autoRotateSpeedY: number;
   autoRotateSpeedZ: number;
   paused?: boolean;
+  imageData?: string; // Base64 encoded image for "image" pattern
+  imageInvert?: boolean; // Invert brightness for image
+  imageAnimate?: boolean; // Enable wave animation on image
 }
 
 export interface AsciiCanvasHandle {
@@ -50,6 +53,9 @@ export const AsciiCanvas = forwardRef<AsciiCanvasHandle, AsciiCanvasProps>(({
   autoRotateSpeedY = 1,
   autoRotateSpeedZ = 0,
   paused = false,
+  imageData,
+  imageInvert = false,
+  imageAnimate = true,
 }, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -60,12 +66,16 @@ export const AsciiCanvas = forwardRef<AsciiCanvasHandle, AsciiCanvasProps>(({
   const startTimeRef = useRef<number>(0);
   const pausedTimeRef = useRef<number>(0);
   const matrixDropsRef = useRef<number[]>([]);
+  const imageRef = useRef<HTMLImageElement | null>(null);
+  const imageCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const imageBrightnessRef = useRef<number[][] | null>(null);
 
   const propsRef = useRef({
     pattern, speed, density, colorMode, textColor,
     hueStart, hueEnd, saturation, lightness,
     rotationX, rotationY, rotationZ,
     autoRotate, autoRotateSpeedX, autoRotateSpeedY, autoRotateSpeedZ,
+    imageInvert, imageAnimate,
   });
 
   useEffect(() => {
@@ -74,8 +84,49 @@ export const AsciiCanvas = forwardRef<AsciiCanvasHandle, AsciiCanvasProps>(({
       hueStart, hueEnd, saturation, lightness,
       rotationX, rotationY, rotationZ,
       autoRotate, autoRotateSpeedX, autoRotateSpeedY, autoRotateSpeedZ,
+      imageInvert, imageAnimate,
     };
-  }, [pattern, speed, density, colorMode, textColor, hueStart, hueEnd, saturation, lightness, rotationX, rotationY, rotationZ, autoRotate, autoRotateSpeedX, autoRotateSpeedY, autoRotateSpeedZ]);
+  }, [pattern, speed, density, colorMode, textColor, hueStart, hueEnd, saturation, lightness, rotationX, rotationY, rotationZ, autoRotate, autoRotateSpeedX, autoRotateSpeedY, autoRotateSpeedZ, imageInvert, imageAnimate]);
+
+  // Load image when imageData changes
+  useEffect(() => {
+    if (!imageData) {
+      imageRef.current = null;
+      imageBrightnessRef.current = null;
+      return;
+    }
+
+    const img = new Image();
+    img.onload = () => {
+      imageRef.current = img;
+      // Pre-process image brightness
+      const tempCanvas = document.createElement('canvas');
+      const maxSize = 200; // Limit processing size
+      const scale = Math.min(maxSize / img.width, maxSize / img.height, 1);
+      tempCanvas.width = Math.floor(img.width * scale);
+      tempCanvas.height = Math.floor(img.height * scale);
+      const tempCtx = tempCanvas.getContext('2d');
+      if (tempCtx) {
+        tempCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
+        const imgData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+        const brightness: number[][] = [];
+        for (let y = 0; y < tempCanvas.height; y++) {
+          brightness[y] = [];
+          for (let x = 0; x < tempCanvas.width; x++) {
+            const i = (y * tempCanvas.width + x) * 4;
+            const r = imgData.data[i];
+            const g = imgData.data[i + 1];
+            const b = imgData.data[i + 2];
+            // Perceived brightness formula
+            brightness[y][x] = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+          }
+        }
+        imageBrightnessRef.current = brightness;
+        imageCanvasRef.current = tempCanvas;
+      }
+    };
+    img.src = imageData;
+  }, [imageData]);
 
   const getColor = useCallback((value: number, props: typeof propsRef.current): string => {
     if (props.colorMode === "green") {
@@ -426,6 +477,73 @@ export const AsciiCanvas = forwardRef<AsciiCanvasHandle, AsciiCanvasProps>(({
 
             const spiral = Math.sin(dist * 0.3 - angle * 3 + elapsed * 2);
             const v = (spiral + 1) / 2;
+
+            const charIndex = Math.floor(v * (ASCII_CHARS.length - 1));
+            ctx.fillStyle = getColor(v, props);
+            ctx.fillText(ASCII_CHARS[charIndex], x * fontSize * 0.6, y * fontSize);
+          }
+        }
+        break;
+      }
+
+      case "image": {
+        const brightness = imageBrightnessRef.current;
+        if (!brightness || brightness.length === 0) {
+          // Show placeholder text if no image loaded
+          ctx.fillStyle = getColor(0.5, props);
+          ctx.font = `${fontSize * 2}px monospace`;
+          ctx.textAlign = "center";
+          ctx.fillText("Upload an image", width / 2, height / 2);
+          ctx.font = `${fontSize}px monospace`;
+          ctx.textAlign = "left";
+          break;
+        }
+
+        const imgRows = brightness.length;
+        const imgCols = brightness[0].length;
+
+        // Calculate aspect-ratio-preserving mapping
+        const imgAspect = imgCols / imgRows;
+        const canvasAspect = cols / (rows * 2); // Account for character aspect ratio
+
+        let mappedCols = cols;
+        let mappedRows = rows;
+        let offsetX = 0;
+        let offsetY = 0;
+
+        if (imgAspect > canvasAspect) {
+          // Image is wider - fit to width
+          mappedRows = Math.floor(cols / imgAspect / 2);
+          offsetY = Math.floor((rows - mappedRows) / 2);
+        } else {
+          // Image is taller - fit to height
+          mappedCols = Math.floor(rows * 2 * imgAspect);
+          offsetX = Math.floor((cols - mappedCols) / 2);
+        }
+
+        for (let y = 0; y < rows; y++) {
+          for (let x = 0; x < cols; x++) {
+            // Map canvas position to image position
+            const imgX = Math.floor(((x - offsetX) / mappedCols) * imgCols);
+            const imgY = Math.floor(((y - offsetY) / mappedRows) * imgRows);
+
+            // Check if within image bounds
+            if (imgX < 0 || imgX >= imgCols || imgY < 0 || imgY >= imgRows) {
+              continue; // Skip pixels outside the image
+            }
+
+            let v = brightness[imgY][imgX];
+
+            // Apply invert if enabled
+            if (props.imageInvert) {
+              v = 1 - v;
+            }
+
+            // Apply animation if enabled
+            if (props.imageAnimate) {
+              const wave = Math.sin((x / cols) * 4 + (y / rows) * 4 + elapsed * 2) * 0.15;
+              v = Math.max(0, Math.min(1, v + wave));
+            }
 
             const charIndex = Math.floor(v * (ASCII_CHARS.length - 1));
             ctx.fillStyle = getColor(v, props);
