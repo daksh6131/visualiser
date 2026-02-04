@@ -31,30 +31,116 @@ interface AsciiAnimationProps {
   enableVignette: boolean;
   seed: number;
   // 3D rotation controls
-  rotationX?: number; // -180 to 180 degrees
-  rotationY?: number; // -180 to 180 degrees
-  rotationZ?: number; // -180 to 180 degrees
-  autoRotate?: boolean; // Enable auto rotation
+  rotationX?: number;
+  rotationY?: number;
+  rotationZ?: number;
+  autoRotate?: boolean;
   autoRotateSpeedX?: number;
   autoRotateSpeedY?: number;
   autoRotateSpeedZ?: number;
 }
 
-// ASCII density characters from light to dark
-const ASCII_GRADIENT = " .,-~:;=!*#$@";
+// === MATHEMATICAL CONSTANTS ===
+const PHI = (1 + Math.sqrt(5)) / 2; // Golden Ratio ≈ 1.618
+const PHI_INV = 1 / PHI;            // Inverse Golden Ratio ≈ 0.618
+const TAU = Math.PI * 2;            // Full circle
+const GOLDEN_ANGLE = TAU * PHI_INV; // Golden Angle ≈ 2.399 radians (137.5°)
+
+// ASCII density characters - carefully ordered by visual density
+const ASCII_GRADIENT = " .·:;=+*#%@";
 const ASCII_GRADIENT_LONG = " .'`^\",:;Il!i><~+_-?][}{1)(|\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$";
+const MATRIX_CHARS = "ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ0123456789";
 
-// Matrix-style characters
-const MATRIX_CHARS = "ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+// === EASING FUNCTIONS ===
+// Attempt to create smooth, organic motion
+const ease = {
+  // Sine-based (smoothest, most natural)
+  inOutSine: (t: number): number => -(Math.cos(Math.PI * t) - 1) / 2,
 
-// Seeded random
+  // Quadratic (subtle acceleration)
+  inOutQuad: (t: number): number => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2,
+
+  // Circular (smooth arc motion)
+  inOutCirc: (t: number): number =>
+    t < 0.5
+      ? (1 - Math.sqrt(1 - Math.pow(2 * t, 2))) / 2
+      : (Math.sqrt(1 - Math.pow(-2 * t + 2, 2)) + 1) / 2,
+
+  // Exponential smoothstep (very smooth)
+  smoothstep: (t: number): number => t * t * (3 - 2 * t),
+
+  // Ken Perlin's improved smoothstep
+  smootherstep: (t: number): number => t * t * t * (t * (t * 6 - 15) + 10),
+};
+
+// === NOISE FUNCTIONS ===
+// Seeded pseudo-random (deterministic)
 const seededRandom = (seed: number): number => {
   const x = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
   return x - Math.floor(x);
 };
 
+// 2D hash function for noise
+const hash2D = (x: number, y: number, seed: number): number => {
+  const n = Math.sin(x * 127.1 + y * 311.7 + seed) * 43758.5453;
+  return n - Math.floor(n);
+};
+
+// Smooth interpolation between noise values (value noise)
+const smoothNoise2D = (x: number, y: number, seed: number): number => {
+  const xi = Math.floor(x);
+  const yi = Math.floor(y);
+  const xf = x - xi;
+  const yf = y - yi;
+
+  // Smooth interpolation using smootherstep
+  const u = ease.smootherstep(xf);
+  const v = ease.smootherstep(yf);
+
+  // Four corners
+  const n00 = hash2D(xi, yi, seed);
+  const n10 = hash2D(xi + 1, yi, seed);
+  const n01 = hash2D(xi, yi + 1, seed);
+  const n11 = hash2D(xi + 1, yi + 1, seed);
+
+  // Bilinear interpolation
+  const nx0 = n00 * (1 - u) + n10 * u;
+  const nx1 = n01 * (1 - u) + n11 * u;
+  return nx0 * (1 - v) + nx1 * v;
+};
+
+// Fractal Brownian Motion (layered noise)
+const fbm = (x: number, y: number, seed: number, octaves: number = 4): number => {
+  let value = 0;
+  let amplitude = 0.5;
+  let frequency = 1;
+  let maxValue = 0;
+
+  for (let i = 0; i < octaves; i++) {
+    value += amplitude * smoothNoise2D(x * frequency, y * frequency, seed + i * 100);
+    maxValue += amplitude;
+    amplitude *= PHI_INV; // Each octave is golden ratio smaller
+    frequency *= PHI;     // Each octave is golden ratio higher frequency
+  }
+
+  return value / maxValue;
+};
+
 // Convert degrees to radians
 const degToRad = (deg: number): number => (deg * Math.PI) / 180;
+
+// Clamp value between min and max
+const clamp = (value: number, min: number, max: number): number =>
+  Math.max(min, Math.min(max, value));
+
+// Linear interpolation
+const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
+
+// Smooth periodic function (better than sin for some cases)
+const smoothPeriodic = (t: number): number => {
+  const x = ((t % 1) + 1) % 1; // Normalize to 0-1
+  return ease.smootherstep(x < 0.5 ? x * 2 : 2 - x * 2);
+};
 
 export const AsciiAnimation: React.FC<AsciiAnimationProps> = ({
   pattern = "donut",
@@ -78,27 +164,28 @@ export const AsciiAnimation: React.FC<AsciiAnimationProps> = ({
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
 
+  // Smooth time with golden ratio relationship
   const time = (frame / fps) * speed;
 
-  // Calculate actual rotation angles (manual + auto)
+  // Use golden ratio for rotation speed relationships (creates pleasing non-repeating patterns)
   const actualRotX = autoRotate
     ? degToRad(rotationX) + time * autoRotateSpeedX
     : degToRad(rotationX);
   const actualRotY = autoRotate
-    ? degToRad(rotationY) + time * autoRotateSpeedY
+    ? degToRad(rotationY) + time * autoRotateSpeedY * PHI_INV
     : degToRad(rotationY);
   const actualRotZ = autoRotate
-    ? degToRad(rotationZ) + time * autoRotateSpeedZ
+    ? degToRad(rotationZ) + time * autoRotateSpeedZ * PHI_INV * PHI_INV
     : degToRad(rotationZ);
 
   // Grid dimensions based on density
-  const baseCols = 80;
-  const baseRows = 40;
+  const baseCols = 100;
+  const baseRows = 50;
   const cols = Math.floor(baseCols * density);
   const rows = Math.floor(baseRows * density);
   const charWidth = width / cols;
   const charHeight = height / rows;
-  const fontSize = Math.min(charWidth, charHeight) * 1.3;
+  const fontSize = Math.min(charWidth, charHeight) * 1.2;
 
   // Generate ASCII grid based on pattern
   const asciiGrid = useMemo(() => {
@@ -106,34 +193,51 @@ export const AsciiAnimation: React.FC<AsciiAnimationProps> = ({
 
     switch (pattern) {
       case "matrix": {
-        // Matrix rain effect
-        const drops: number[] = [];
-        for (let i = 0; i < cols; i++) {
-          drops[i] = seededRandom(seed + i) * rows;
+        // Matrix rain with golden ratio timing
+        const numDrops = Math.floor(cols * PHI_INV);
+        const drops: { x: number; speed: number; length: number; offset: number }[] = [];
+
+        for (let i = 0; i < numDrops; i++) {
+          const x = Math.floor(seededRandom(seed + i) * cols);
+          drops.push({
+            x,
+            speed: 0.3 + seededRandom(seed + i * 100) * 0.5,
+            length: 8 + Math.floor(seededRandom(seed + i * 200) * 15),
+            offset: seededRandom(seed + i * 300) * rows * 2,
+          });
         }
 
         for (let row = 0; row < rows; row++) {
           const gridRow: { char: string; brightness: number; colorIndex: number }[] = [];
           for (let col = 0; col < cols; col++) {
-            const dropSpeed = 0.3 + seededRandom(seed + col * 100) * 0.4;
-            const dropY = (drops[col] + time * 15 * dropSpeed) % (rows + 20);
-            const distFromHead = row - dropY;
-
             let brightness = 0;
             let char = " ";
 
-            if (distFromHead >= 0 && distFromHead < 15) {
-              // Trail
-              brightness = 1 - distFromHead / 15;
-              const charSeed = seed + row * cols + col + Math.floor(time * 10);
-              const charIndex = Math.floor(seededRandom(charSeed) * MATRIX_CHARS.length);
-              char = MATRIX_CHARS[charIndex];
-            } else if (distFromHead >= -1 && distFromHead < 0) {
-              // Head (brightest)
-              brightness = 1.2;
-              const charSeed = seed + row * cols + col + Math.floor(time * 20);
-              const charIndex = Math.floor(seededRandom(charSeed) * MATRIX_CHARS.length);
-              char = MATRIX_CHARS[charIndex];
+            // Check all drops
+            for (const drop of drops) {
+              if (Math.abs(drop.x - col) < 1) {
+                const dropY = ((drop.offset + time * 20 * drop.speed) % (rows + drop.length + 10)) - drop.length;
+                const distFromHead = row - dropY;
+
+                if (distFromHead >= 0 && distFromHead < drop.length) {
+                  // Smooth falloff using golden ratio
+                  const normalizedDist = distFromHead / drop.length;
+                  const falloff = 1 - ease.smootherstep(normalizedDist);
+
+                  if (falloff > brightness) {
+                    brightness = falloff;
+                    // Character changes smoothly
+                    const charSeed = seed + row * cols + col + Math.floor(time * (5 + drop.speed * 5));
+                    const charIndex = Math.floor(seededRandom(charSeed) * MATRIX_CHARS.length);
+                    char = MATRIX_CHARS[charIndex];
+                  }
+                } else if (distFromHead >= -1 && distFromHead < 0) {
+                  // Bright head
+                  brightness = 1.2;
+                  const charSeed = seed + row * cols + col + Math.floor(time * 15);
+                  char = MATRIX_CHARS[Math.floor(seededRandom(charSeed) * MATRIX_CHARS.length)];
+                }
+              }
             }
 
             gridRow.push({ char, brightness, colorIndex: col });
@@ -144,11 +248,10 @@ export const AsciiAnimation: React.FC<AsciiAnimationProps> = ({
       }
 
       case "donut": {
-        // 3D rotating donut/torus with controllable rotation
+        // 3D torus with golden ratio proportions
         const A = actualRotX;
         const B = actualRotY;
 
-        // Z-buffer and luminance buffer
         const zBuffer: number[][] = [];
         const luminance: number[][] = [];
 
@@ -157,14 +260,18 @@ export const AsciiAnimation: React.FC<AsciiAnimationProps> = ({
           luminance[i] = new Array(cols).fill(0);
         }
 
-        const R1 = 1; // Radius of the tube
-        const R2 = 2; // Distance from center to tube center
+        // Golden ratio torus proportions
+        const R1 = 1;           // Tube radius
+        const R2 = R1 * PHI;    // Distance to tube center (golden ratio!)
         const K2 = 5;
         const K1 = cols * K2 * 3 / (8 * (R1 + R2));
 
-        // Render torus
-        for (let theta = 0; theta < 6.28; theta += 0.07) {
-          for (let phi = 0; phi < 6.28; phi += 0.02) {
+        // Higher resolution sampling for smoother surface
+        const thetaStep = 0.04;
+        const phiStep = 0.015;
+
+        for (let theta = 0; theta < TAU; theta += thetaStep) {
+          for (let phi = 0; phi < TAU; phi += phiStep) {
             const cosA = Math.cos(A), sinA = Math.sin(A);
             const cosB = Math.cos(B), sinB = Math.sin(B);
             const cosTheta = Math.cos(theta), sinTheta = Math.sin(theta);
@@ -181,19 +288,23 @@ export const AsciiAnimation: React.FC<AsciiAnimationProps> = ({
             const xp = Math.floor(cols / 2 + K1 * ooz * x);
             const yp = Math.floor(rows / 2 - K1 * ooz * y * 0.5);
 
-            // Luminance calculation
-            const L = cosPhi * cosTheta * sinB - cosA * cosTheta * sinPhi - sinA * sinTheta + cosB * (cosA * sinTheta - cosTheta * sinA * sinPhi);
+            // Improved lighting calculation
+            const L = cosPhi * cosTheta * sinB
+                    - cosA * cosTheta * sinPhi
+                    - sinA * sinTheta
+                    + cosB * (cosA * sinTheta - cosTheta * sinA * sinPhi);
 
-            if (L > 0 && xp >= 0 && xp < cols && yp >= 0 && yp < rows) {
+            if (xp >= 0 && xp < cols && yp >= 0 && yp < rows) {
               if (ooz > zBuffer[yp][xp]) {
                 zBuffer[yp][xp] = ooz;
-                luminance[yp][xp] = L;
+                // Smooth luminance with ambient term
+                luminance[yp][xp] = Math.max(0, L * 0.8 + 0.2);
               }
             }
           }
         }
 
-        // Convert to ASCII
+        // Convert to ASCII with smooth gradients
         for (let row = 0; row < rows; row++) {
           const gridRow: { char: string; brightness: number; colorIndex: number }[] = [];
           for (let col = 0; col < cols; col++) {
@@ -202,12 +313,14 @@ export const AsciiAnimation: React.FC<AsciiAnimationProps> = ({
             let brightness = 0;
 
             if (L > 0) {
-              const charIndex = Math.floor(L * 8);
-              char = ".,-~:;=!*#$@"[Math.min(charIndex, 11)];
-              brightness = L;
+              // Smooth character selection
+              const smoothL = ease.smoothstep(L);
+              const charIndex = Math.floor(smoothL * (ASCII_GRADIENT.length - 1));
+              char = ASCII_GRADIENT[clamp(charIndex, 0, ASCII_GRADIENT.length - 1)];
+              brightness = smoothL;
             }
 
-            gridRow.push({ char, brightness, colorIndex: row + col });
+            gridRow.push({ char, brightness, colorIndex: Math.floor((row + col) * PHI) % 360 });
           }
           grid.push(gridRow);
         }
@@ -215,110 +328,121 @@ export const AsciiAnimation: React.FC<AsciiAnimationProps> = ({
       }
 
       case "cube": {
-        // 3D rotating cube with controllable rotation
+        // 3D cube with golden ratio nested cubes
         const rotX = actualRotX;
         const rotY = actualRotY;
         const rotZ = actualRotZ;
 
-        // Cube vertices
-        const vertices = [
-          [-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1],
-          [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1],
-        ];
+        // Multiple nested cubes at golden ratio scales
+        const cubeScales = [1, PHI_INV, PHI_INV * PHI_INV];
 
-        // Edges
-        const edges = [
-          [0, 1], [1, 2], [2, 3], [3, 0],
-          [4, 5], [5, 6], [6, 7], [7, 4],
-          [0, 4], [1, 5], [2, 6], [3, 7],
-        ];
+        const charGrid: { char: string; z: number }[][] = [];
+        for (let i = 0; i < rows; i++) {
+          charGrid[i] = new Array(cols).fill(null).map(() => ({ char: " ", z: -Infinity }));
+        }
 
-        // Rotation matrices
+        // Rotation matrix
         const cosX = Math.cos(rotX), sinX = Math.sin(rotX);
         const cosY = Math.cos(rotY), sinY = Math.sin(rotY);
         const cosZ = Math.cos(rotZ), sinZ = Math.sin(rotZ);
 
         const rotate = (v: number[]): number[] => {
           let [x, y, z] = v;
-          // Rotate X
+          // X rotation
           let temp = y;
           y = y * cosX - z * sinX;
           z = temp * sinX + z * cosX;
-          // Rotate Y
+          // Y rotation
           temp = x;
           x = x * cosY + z * sinY;
           z = -temp * sinY + z * cosY;
-          // Rotate Z
+          // Z rotation
           temp = x;
           x = x * cosZ - y * sinZ;
           y = temp * sinZ + y * cosZ;
           return [x, y, z];
         };
 
-        // Project to 2D
-        const project = (v: number[]): [number, number] => {
-          const scale = 12;
-          const distance = 5;
+        const project = (v: number[], scale: number): [number, number, number] => {
+          const projScale = 15 * scale;
+          const distance = 6;
           const factor = distance / (distance + v[2]);
           return [
-            Math.floor(cols / 2 + v[0] * scale * factor),
-            Math.floor(rows / 2 + v[1] * scale * factor * 0.5),
+            cols / 2 + v[0] * projScale * factor,
+            rows / 2 + v[1] * projScale * factor * 0.5,
+            v[2],
           ];
         };
 
-        // Initialize empty grid
-        const charGrid: string[][] = [];
-        for (let i = 0; i < rows; i++) {
-          charGrid[i] = new Array(cols).fill(" ");
-        }
+        // Smooth line drawing with anti-aliasing concept
+        const drawLine = (x0: number, y0: number, x1: number, y1: number, z: number, char: string, brightness: number) => {
+          const dx = x1 - x0;
+          const dy = y1 - y0;
+          const steps = Math.max(Math.abs(dx), Math.abs(dy)) * 2;
 
-        // Draw edges using Bresenham's line algorithm
-        const drawLine = (x0: number, y0: number, x1: number, y1: number, char: string) => {
-          const dx = Math.abs(x1 - x0);
-          const dy = Math.abs(y1 - y0);
-          const sx = x0 < x1 ? 1 : -1;
-          const sy = y0 < y1 ? 1 : -1;
-          let err = dx - dy;
+          for (let i = 0; i <= steps; i++) {
+            const t = steps === 0 ? 0 : i / steps;
+            const smoothT = ease.smoothstep(t);
+            const x = Math.round(lerp(x0, x1, t));
+            const y = Math.round(lerp(y0, y1, t));
+            const currentZ = lerp(z, z, smoothT);
 
-          while (true) {
-            if (x0 >= 0 && x0 < cols && y0 >= 0 && y0 < rows) {
-              charGrid[y0][x0] = char;
+            if (x >= 0 && x < cols && y >= 0 && y < rows) {
+              if (currentZ > charGrid[y][x].z) {
+                charGrid[y][x] = { char, z: currentZ };
+              }
             }
-            if (x0 === x1 && y0 === y1) break;
-            const e2 = 2 * err;
-            if (e2 > -dy) { err -= dy; x0 += sx; }
-            if (e2 < dx) { err += dx; y0 += sy; }
           }
         };
 
-        // Draw cube
-        for (const [i, j] of edges) {
-          const v1 = rotate(vertices[i]);
-          const v2 = rotate(vertices[j]);
-          const [x1, y1] = project(v1);
-          const [x2, y2] = project(v2);
-          const edgeChar = v1[2] + v2[2] > 0 ? "#" : "-";
-          drawLine(x1, y1, x2, y2, edgeChar);
-        }
+        // Draw cubes at different scales
+        cubeScales.forEach((scale, scaleIdx) => {
+          const vertices = [
+            [-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1],
+            [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1],
+          ].map(v => v.map(c => c * scale));
 
-        // Draw vertices
-        for (const v of vertices) {
-          const rotated = rotate(v);
-          const [x, y] = project(rotated);
-          if (x >= 0 && x < cols && y >= 0 && y < rows) {
-            charGrid[y][x] = "@";
+          const edges = [
+            [0, 1], [1, 2], [2, 3], [3, 0],
+            [4, 5], [5, 6], [6, 7], [7, 4],
+            [0, 4], [1, 5], [2, 6], [3, 7],
+          ];
+
+          // Draw edges
+          for (const [i, j] of edges) {
+            const v1 = rotate(vertices[i]);
+            const v2 = rotate(vertices[j]);
+            const [x1, y1, z1] = project(v1, 1);
+            const [x2, y2, z2] = project(v2, 1);
+            const avgZ = (z1 + z2) / 2;
+            const edgeChar = avgZ > 0 ? "█" : "░";
+            drawLine(x1, y1, x2, y2, avgZ, edgeChar, scaleIdx === 0 ? 1 : PHI_INV);
           }
-        }
+
+          // Draw vertices
+          for (const v of vertices) {
+            const rotated = rotate(v);
+            const [x, y, z] = project(rotated, 1);
+            const xi = Math.round(x);
+            const yi = Math.round(y);
+            if (xi >= 0 && xi < cols && yi >= 0 && yi < rows && z > charGrid[yi][xi].z) {
+              charGrid[yi][xi] = { char: "◆", z: z + 0.1 };
+            }
+          }
+        });
 
         // Convert to grid format
         for (let row = 0; row < rows; row++) {
           const gridRow: { char: string; brightness: number; colorIndex: number }[] = [];
           for (let col = 0; col < cols; col++) {
-            const char = charGrid[row][col];
+            const cell = charGrid[row][col];
+            const brightness = cell.char === " " ? 0 :
+                             cell.char === "◆" ? 1 :
+                             cell.char === "█" ? 0.9 : 0.5;
             gridRow.push({
-              char,
-              brightness: char === "@" ? 1 : char === "#" ? 0.8 : char === "-" ? 0.5 : 0,
-              colorIndex: row + col,
+              char: cell.char,
+              brightness,
+              colorIndex: Math.floor((row + col) * PHI * 10) % 360,
             });
           }
           grid.push(gridRow);
@@ -327,27 +451,40 @@ export const AsciiAnimation: React.FC<AsciiAnimationProps> = ({
       }
 
       case "plasma": {
-        // Animated plasma effect
+        // Plasma with golden ratio frequencies for non-repeating patterns
+        const freqs = [1, PHI, PHI * PHI, PHI * PHI * PHI];
+
         for (let row = 0; row < rows; row++) {
           const gridRow: { char: string; brightness: number; colorIndex: number }[] = [];
           for (let col = 0; col < cols; col++) {
             const x = col / cols * 4;
             const y = row / rows * 4;
 
-            // Multiple sine waves combined
-            let value = Math.sin(x * 3 + time * 2);
-            value += Math.sin(y * 2 + time * 1.5);
-            value += Math.sin((x + y) * 1.5 + time);
-            value += Math.sin(Math.sqrt(x * x + y * y) * 2 - time * 2);
-            value = (value + 4) / 8; // Normalize to 0-1
+            // Golden ratio based frequencies create non-repeating patterns
+            let value = 0;
+            value += Math.sin(x * freqs[0] + time * 1.5) * 0.25;
+            value += Math.sin(y * freqs[1] + time * 1.2) * 0.25;
+            value += Math.sin((x + y) * freqs[2] * 0.5 + time * 0.8) * 0.25;
+
+            // Radial component with golden angle
+            const cx = x - 2, cy = y - 2;
+            const dist = Math.sqrt(cx * cx + cy * cy);
+            const angle = Math.atan2(cy, cx);
+            value += Math.sin(dist * freqs[3] - time * 2 + angle * PHI) * 0.25;
+
+            // FBM noise layer for organic feel
+            value += fbm(x + time * 0.3, y + time * 0.2, seed, 3) * 0.3;
+
+            // Normalize and smooth
+            value = ease.smoothstep((value + 1) / 2);
 
             const charIndex = Math.floor(value * (ASCII_GRADIENT_LONG.length - 1));
-            const char = ASCII_GRADIENT_LONG[charIndex];
+            const char = ASCII_GRADIENT_LONG[clamp(charIndex, 0, ASCII_GRADIENT_LONG.length - 1)];
 
             gridRow.push({
               char,
               brightness: value,
-              colorIndex: Math.floor(value * 360),
+              colorIndex: Math.floor(value * 360 + time * 30) % 360,
             });
           }
           grid.push(gridRow);
@@ -356,33 +493,47 @@ export const AsciiAnimation: React.FC<AsciiAnimationProps> = ({
       }
 
       case "tunnel": {
-        // Tunnel zoom effect
+        // Hypnotic tunnel with golden spiral influence
         const centerX = cols / 2;
         const centerY = rows / 2;
 
         for (let row = 0; row < rows; row++) {
           const gridRow: { char: string; brightness: number; colorIndex: number }[] = [];
           for (let col = 0; col < cols; col++) {
-            const dx = col - centerX;
-            const dy = (row - centerY) * 2; // Aspect ratio correction
+            const dx = (col - centerX) / cols;
+            const dy = (row - centerY) / rows * 2;
             const distance = Math.sqrt(dx * dx + dy * dy);
             const angle = Math.atan2(dy, dx);
 
-            // Tunnel depth calculation
-            const depth = 50 / (distance + 1);
-            const tunnelZ = depth + time * 5;
+            // Tunnel depth with smooth logarithmic scaling
+            const depth = 1 / (distance + 0.1);
+            const tunnelZ = depth * 0.5 + time * 2;
 
-            // Create ring pattern
-            const ringValue = Math.sin(tunnelZ * 2 + angle * 8) * 0.5 + 0.5;
-            const brightness = ringValue * Math.min(1, distance / 5);
+            // Golden angle based spiral arms
+            const spiralArms = 5; // Fibonacci number
+            const spiralAngle = angle * spiralArms + tunnelZ * PHI;
 
-            const charIndex = Math.floor(brightness * (ASCII_GRADIENT.length - 1));
-            const char = distance < 2 ? " " : ASCII_GRADIENT[charIndex];
+            // Multiple layers with golden ratio relationship
+            let value = 0;
+            value += Math.sin(spiralAngle) * 0.4;
+            value += Math.sin(tunnelZ * PHI * 3) * 0.3;
+            value += Math.sin(angle * 8 + tunnelZ) * 0.3;
+
+            // Smooth radial falloff
+            const radialFade = ease.smoothstep(clamp(distance * 3, 0, 1));
+            value = (value + 1) / 2 * radialFade;
+
+            // Center void
+            const centerFade = ease.smoothstep(clamp(distance * 8, 0, 1));
+            value *= centerFade;
+
+            const charIndex = Math.floor(value * (ASCII_GRADIENT.length - 1));
+            const char = ASCII_GRADIENT[clamp(charIndex, 0, ASCII_GRADIENT.length - 1)];
 
             gridRow.push({
               char,
-              brightness,
-              colorIndex: Math.floor(angle * 180 / Math.PI + 180),
+              brightness: value,
+              colorIndex: Math.floor((angle / TAU + 0.5) * 360 + tunnelZ * 20) % 360,
             });
           }
           grid.push(gridRow);
@@ -391,30 +542,50 @@ export const AsciiAnimation: React.FC<AsciiAnimationProps> = ({
       }
 
       case "wave": {
-        // 3D sine wave surface
+        // 3D wave surface with golden ratio wave relationships
         for (let row = 0; row < rows; row++) {
           const gridRow: { char: string; brightness: number; colorIndex: number }[] = [];
           for (let col = 0; col < cols; col++) {
-            const x = (col - cols / 2) / 10;
-            const y = (row - rows / 2) / 5;
+            const x = (col - cols / 2) / (cols / 8);
+            const y = (row - rows / 2) / (rows / 4);
 
-            // Multiple overlapping waves
-            let z = Math.sin(x * 2 + time * 3) * Math.cos(y * 2 + time * 2);
-            z += Math.sin(Math.sqrt(x * x + y * y) * 3 - time * 4) * 0.5;
+            // Multiple waves with golden ratio frequencies
+            let z = 0;
+            z += Math.sin(x * 1 + time * 2) * Math.cos(y * PHI_INV + time * 1.5) * 0.4;
+            z += Math.sin(x * PHI + y * 1 - time * 1.8) * 0.3;
 
-            // Simple lighting
-            const dxVal = Math.cos(x * 2 + time * 3) * 2 * Math.cos(y * 2 + time * 2);
-            const dyVal = Math.sin(x * 2 + time * 3) * (-Math.sin(y * 2 + time * 2) * 2);
-            const light = (dxVal + dyVal + 2) / 4;
+            // Radial wave
+            const dist = Math.sqrt(x * x + y * y);
+            z += Math.sin(dist * PHI - time * 2.5) * 0.3 / (dist * 0.3 + 1);
 
-            const brightness = Math.max(0, Math.min(1, (z + 1.5) / 3 * light));
+            // Calculate surface normal for lighting
+            const eps = 0.1;
+            const zx1 = Math.sin((x + eps) * 1 + time * 2) * Math.cos(y * PHI_INV + time * 1.5) * 0.4;
+            const zx2 = Math.sin((x - eps) * 1 + time * 2) * Math.cos(y * PHI_INV + time * 1.5) * 0.4;
+            const zy1 = Math.sin(x * 1 + time * 2) * Math.cos((y + eps) * PHI_INV + time * 1.5) * 0.4;
+            const zy2 = Math.sin(x * 1 + time * 2) * Math.cos((y - eps) * PHI_INV + time * 1.5) * 0.4;
+
+            const dzdx = (zx1 - zx2) / (2 * eps);
+            const dzdy = (zy1 - zy2) / (2 * eps);
+
+            // Normal vector (simplified)
+            const normalMag = Math.sqrt(dzdx * dzdx + dzdy * dzdy + 1);
+            const nz = 1 / normalMag;
+
+            // Light from upper-front
+            const light = clamp(nz * 0.7 + 0.3, 0, 1);
+
+            // Height-based shading
+            const heightShade = ease.smoothstep((z + 1) / 2);
+            const brightness = heightShade * light;
+
             const charIndex = Math.floor(brightness * (ASCII_GRADIENT_LONG.length - 1));
-            const char = ASCII_GRADIENT_LONG[Math.max(0, charIndex)];
+            const char = ASCII_GRADIENT_LONG[clamp(charIndex, 0, ASCII_GRADIENT_LONG.length - 1)];
 
             gridRow.push({
               char,
               brightness,
-              colorIndex: Math.floor((z + 1.5) * 120),
+              colorIndex: Math.floor((z + 1) * 180 + time * 20) % 360,
             });
           }
           grid.push(gridRow);
@@ -423,7 +594,7 @@ export const AsciiAnimation: React.FC<AsciiAnimationProps> = ({
       }
 
       case "sphere": {
-        // 3D rotating sphere with controllable rotation
+        // 3D sphere with Fibonacci lattice points for uniform distribution
         const rotY = actualRotY;
         const rotX = actualRotX;
 
@@ -438,32 +609,42 @@ export const AsciiAnimation: React.FC<AsciiAnimationProps> = ({
             let brightness = 0;
 
             if (r2 <= 1) {
-              // Point is on sphere surface
               const pz = Math.sqrt(1 - r2);
 
-              // Apply X rotation first
+              // Apply rotations
               let x1 = px;
               let y1 = py * Math.cos(rotX) - pz * Math.sin(rotX);
               let z1 = py * Math.sin(rotX) + pz * Math.cos(rotX);
 
-              // Then Y rotation
               const finalX = x1 * Math.cos(rotY) + z1 * Math.sin(rotY);
               const finalY = y1;
               const finalZ = -x1 * Math.sin(rotY) + z1 * Math.cos(rotY);
 
-              // Checker pattern on sphere
-              const u = Math.atan2(finalX, finalZ) / Math.PI;
-              const v = Math.asin(Math.max(-1, Math.min(1, finalY))) / (Math.PI / 2);
-              const checker = (Math.floor(u * 8) + Math.floor(v * 8)) % 2;
+              // Fibonacci spiral pattern on sphere (golden angle)
+              const lat = Math.asin(clamp(finalY, -1, 1));
+              const lon = Math.atan2(finalX, finalZ);
 
-              // Lighting (simple diffuse)
-              const lightDir = [0.5, -0.5, 0.7];
-              const mag = Math.sqrt(lightDir[0]**2 + lightDir[1]**2 + lightDir[2]**2);
-              const light = Math.max(0, (finalX * lightDir[0] + finalY * lightDir[1] + finalZ * lightDir[2]) / mag);
+              // Golden spiral bands
+              const spiralParam = lat / (Math.PI / 2) * 8;
+              const spiralLon = lon + spiralParam * GOLDEN_ANGLE;
+              const pattern = Math.sin(spiralLon * 5) * 0.5 + 0.5;
 
-              brightness = (light * 0.7 + 0.3) * (checker ? 1 : 0.5);
+              // Latitude bands
+              const latBands = Math.sin(lat * 13) * 0.3 + 0.7;
+
+              // Improved lighting with fresnel-like edge glow
+              const lightDir = [0.4, -0.3, 0.866];
+              const dotProduct = finalX * lightDir[0] + finalY * lightDir[1] + finalZ * lightDir[2];
+              const diffuse = clamp(dotProduct, 0, 1);
+
+              // Fresnel edge highlight
+              const viewDot = finalZ; // Simplified: viewer at +Z
+              const fresnel = Math.pow(1 - Math.abs(viewDot), 2) * 0.3;
+
+              brightness = ease.smoothstep(diffuse * 0.7 + 0.2 + fresnel) * pattern * latBands;
+
               const charIndex = Math.floor(brightness * (ASCII_GRADIENT.length - 1));
-              char = ASCII_GRADIENT[charIndex];
+              char = ASCII_GRADIENT[clamp(charIndex, 0, ASCII_GRADIENT.length - 1)];
             }
 
             gridRow.push({
@@ -478,33 +659,57 @@ export const AsciiAnimation: React.FC<AsciiAnimationProps> = ({
       }
 
       case "spiral": {
-        // Animated spiral pattern
+        // Golden spiral with hypnotic phyllotaxis pattern
         const centerX = cols / 2;
         const centerY = rows / 2;
 
         for (let row = 0; row < rows; row++) {
           const gridRow: { char: string; brightness: number; colorIndex: number }[] = [];
           for (let col = 0; col < cols; col++) {
-            const dx = col - centerX;
-            const dy = (row - centerY) * 2;
+            const dx = (col - centerX) / (cols / 2);
+            const dy = (row - centerY) / (rows / 2) * 2;
             const distance = Math.sqrt(dx * dx + dy * dy);
             const angle = Math.atan2(dy, dx);
 
-            // Spiral arms
-            const spiralAngle = angle + distance * 0.15 - time * 3;
-            const armValue = Math.sin(spiralAngle * 4) * 0.5 + 0.5;
+            // Golden spiral formula: r = a * e^(b*theta)
+            // where b = cot(golden angle)
+            const goldenSpiral = distance * Math.exp(-0.3063 * (angle + time * 2));
 
-            // Fade out from center
-            const fade = Math.min(1, distance / 10);
-            const brightness = armValue * fade;
+            // Phyllotaxis pattern (sunflower seed arrangement)
+            const n = 144; // Fibonacci number
+            let closestDist = Infinity;
+
+            for (let i = 1; i <= n; i++) {
+              // Golden angle based positioning
+              const theta = i * GOLDEN_ANGLE + time * 0.5;
+              const r = 0.8 * Math.sqrt(i / n);
+              const px = r * Math.cos(theta);
+              const py = r * Math.sin(theta);
+              const d = Math.sqrt((dx - px) ** 2 + (dy - py) ** 2);
+              closestDist = Math.min(closestDist, d);
+            }
+
+            // Spiral arms
+            const arms = 5; // Fibonacci
+            const spiralAngle = angle * arms + distance * 3 - time * 3;
+            const spiralValue = Math.sin(spiralAngle) * 0.5 + 0.5;
+
+            // Combine patterns
+            const seedPattern = ease.smoothstep(1 - clamp(closestDist * 15, 0, 1));
+            const radialFade = ease.smoothstep(1 - clamp(distance, 0, 1));
+
+            let brightness = (spiralValue * 0.6 + seedPattern * 0.4) * radialFade;
+
+            // Add subtle rotation effect
+            brightness *= 0.7 + 0.3 * Math.sin(goldenSpiral * 5 + time);
 
             const charIndex = Math.floor(brightness * (ASCII_GRADIENT_LONG.length - 1));
-            const char = ASCII_GRADIENT_LONG[charIndex];
+            const char = ASCII_GRADIENT_LONG[clamp(charIndex, 0, ASCII_GRADIENT_LONG.length - 1)];
 
             gridRow.push({
               char,
               brightness,
-              colorIndex: Math.floor(((angle / Math.PI + 1) * 180 + time * 50) % 360),
+              colorIndex: Math.floor(((angle / TAU + 0.5) * 360 + time * 40) % 360),
             });
           }
           grid.push(gridRow);
@@ -516,12 +721,14 @@ export const AsciiAnimation: React.FC<AsciiAnimationProps> = ({
     return grid;
   }, [pattern, cols, rows, time, seed, actualRotX, actualRotY, actualRotZ]);
 
-  // Get color for a cell
+  // Get color for a cell with smooth gradients
   const getCellColor = (brightness: number, colorIndex: number): string => {
     if (colorMode === "green") {
-      // Matrix green
-      const green = Math.floor(100 + brightness * 155);
-      return `rgb(0, ${green}, 0)`;
+      // Matrix green with subtle variation
+      const smoothBright = ease.smoothstep(brightness);
+      const green = Math.floor(80 + smoothBright * 175);
+      const blue = Math.floor(smoothBright * 30);
+      return `rgb(0, ${green}, ${blue})`;
     } else if (colorMode === "rainbow") {
       return getRainbowColor(colorIndex, 360, rainbowConfig, frame, fps);
     }
@@ -540,7 +747,7 @@ export const AsciiAnimation: React.FC<AsciiAnimationProps> = ({
           height: "100%",
           display: "flex",
           flexDirection: "column",
-          fontFamily: "'Courier New', 'Monaco', monospace",
+          fontFamily: "'Fira Code', 'JetBrains Mono', 'Courier New', monospace",
           fontSize: `${fontSize}px`,
           lineHeight: `${charHeight}px`,
           letterSpacing: "0px",
@@ -564,9 +771,9 @@ export const AsciiAnimation: React.FC<AsciiAnimationProps> = ({
                   display: "inline-block",
                   textAlign: "center",
                   color: getCellColor(cell.brightness, cell.colorIndex),
-                  opacity: Math.max(0.1, cell.brightness),
-                  textShadow: cell.brightness > 0.7 && colorMode === "green"
-                    ? `0 0 10px rgba(0, 255, 0, ${cell.brightness * 0.5})`
+                  opacity: ease.smoothstep(Math.max(0.05, cell.brightness)),
+                  textShadow: cell.brightness > 0.6 && colorMode === "green"
+                    ? `0 0 ${8 * cell.brightness}px rgba(0, 255, 50, ${cell.brightness * 0.6})`
                     : "none",
                 }}
               >
@@ -578,10 +785,10 @@ export const AsciiAnimation: React.FC<AsciiAnimationProps> = ({
       </div>
 
       {/* Effects */}
-      {enableNoise && <Noise opacity={0.08} animated />}
-      {enableVignette && <Vignette intensity={0.6} />}
+      {enableNoise && <Noise opacity={0.06} animated />}
+      {enableVignette && <Vignette intensity={0.5} />}
 
-      {/* Scanline effect for retro look */}
+      {/* Subtle scanline effect */}
       <div
         style={{
           position: "absolute",
@@ -591,10 +798,10 @@ export const AsciiAnimation: React.FC<AsciiAnimationProps> = ({
           bottom: 0,
           background: `repeating-linear-gradient(
             0deg,
-            rgba(0, 0, 0, 0.1) 0px,
-            rgba(0, 0, 0, 0.1) 1px,
+            rgba(0, 0, 0, 0.03) 0px,
+            rgba(0, 0, 0, 0.03) 1px,
             transparent 1px,
-            transparent 3px
+            transparent 2px
           )`,
           pointerEvents: "none",
         }}
