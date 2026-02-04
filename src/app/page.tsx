@@ -37,10 +37,21 @@ const geometricShapes = [
   { value: "star", label: "Star" },
 ];
 
-const asciiShapes = [
-  { value: "cup", label: "Cup" },
-  { value: "heart", label: "Heart" },
-  { value: "star", label: "Star" },
+const asciiPatterns = [
+  { value: "donut", label: "Donut" },
+  { value: "matrix", label: "Matrix" },
+  { value: "cube", label: "Cube" },
+  { value: "sphere", label: "Sphere" },
+  { value: "plasma", label: "Plasma" },
+  { value: "tunnel", label: "Tunnel" },
+  { value: "wave", label: "Wave" },
+  { value: "spiral", label: "Spiral" },
+];
+
+const asciiColorModes = [
+  { value: "green", label: "Matrix Green" },
+  { value: "single", label: "Single Color" },
+  { value: "rainbow", label: "Rainbow" },
 ];
 
 const wavePatterns = [
@@ -89,11 +100,19 @@ type WavePattern = "waves" | "spiral" | "vortex" | "terrain" | "ripple" | "fabri
 type TunnelShape = "circle" | "triangle" | "square" | "hexagon" | "star" | "octagon";
 type TunnelPattern = "concentric" | "starburst";
 type ColorMode = "single" | "gradient" | "rainbow";
+type AsciiPattern = "matrix" | "donut" | "cube" | "plasma" | "tunnel" | "wave" | "sphere" | "spiral";
+type AsciiColorMode = "single" | "rainbow" | "green";
 
 export default function Home() {
-  const [type, setType] = useState<AnimationType>("tunnel");
+  const [type, setType] = useState<AnimationType>("ascii");
   const [shape, setShape] = useState("hexagon");
   const [text, setText] = useState("HELLO");
+
+  // ASCII controls
+  const [asciiPattern, setAsciiPattern] = useState<AsciiPattern>("donut");
+  const [asciiColorMode, setAsciiColorMode] = useState<AsciiColorMode>("green");
+  const [asciiSpeed, setAsciiSpeed] = useState(1);
+  const [asciiDensity, setAsciiDensity] = useState(1);
   const [backgroundColor, setBackgroundColor] = useState("#000000");
   const [primaryColor, setPrimaryColor] = useState("#ffffff");
   const [accentColor, setAccentColor] = useState("#ec4899");
@@ -183,9 +202,12 @@ export default function Home() {
       setBackgroundColor("#000000");
       setPrimaryColor("#ffffff");
       setColorMode("rainbow");
+    } else if (newType === "ascii") {
+      setBackgroundColor("#000000");
+      setPrimaryColor("#00ff00");
+      setAsciiColorMode("green");
     } else {
-      setShape("cup");
-      setBackgroundColor("#0066ff");
+      setBackgroundColor("#000000");
     }
   };
 
@@ -268,6 +290,20 @@ export default function Home() {
       ];
       setGradientColors(randomGradient);
       setMeshColors(randomGradient);
+    } else if (type === "ascii") {
+      const randomPattern = asciiPatterns[Math.floor(Math.random() * asciiPatterns.length)].value as AsciiPattern;
+      setAsciiPattern(randomPattern);
+      const randomColorMode = asciiColorModes[Math.floor(Math.random() * asciiColorModes.length)].value as AsciiColorMode;
+      setAsciiColorMode(randomColorMode);
+      setAsciiSpeed(0.5 + Math.random() * 2);
+      setAsciiDensity(0.7 + Math.random() * 0.6);
+
+      if (randomColorMode === "rainbow") {
+        setHueStart(Math.floor(Math.random() * 360));
+        setHueEnd(Math.floor(Math.random() * 360));
+        setSaturation(60 + Math.random() * 40);
+        setLightness(50 + Math.random() * 20);
+      }
     }
   };
 
@@ -336,11 +372,17 @@ export default function Home() {
   }), [backgroundColor, primaryColor, tunnelPattern, tunnelShape, layerCount, colorMode, rainbowConfig, gradientColors, zoomSpeed, zoomDirection, enableMeshGradient, meshColors, enableGlow, glowIntensity, strokeWidth, enableNoise, enableVignette, tunnelRotationSpeed, seed]);
 
   const asciiProps = useMemo(() => ({
-    text: text.toUpperCase(),
+    pattern: asciiPattern,
     backgroundColor,
-    textColor: "#ffffff",
-    shape: shape as "cup" | "heart" | "star",
-  }), [text, backgroundColor, shape]);
+    textColor: primaryColor,
+    colorMode: asciiColorMode,
+    rainbowConfig,
+    speed: asciiSpeed,
+    density: asciiDensity,
+    enableNoise,
+    enableVignette,
+    seed,
+  }), [asciiPattern, backgroundColor, primaryColor, asciiColorMode, rainbowConfig, asciiSpeed, asciiDensity, enableNoise, enableVignette, seed]);
 
   return (
     <div className="dark min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-4 md:p-8">
@@ -457,14 +499,19 @@ export default function Home() {
 
                 <TabsContent value="ascii" className="mt-3">
                   <div className="space-y-1.5">
-                    <Label htmlFor="text" className="text-xs">Display Text</Label>
-                    <Input
-                      id="text"
-                      value={text}
-                      onChange={(e) => setText(e.target.value)}
-                      placeholder="Enter text"
-                      className="bg-slate-800/50 h-8 text-sm"
-                    />
+                    <Label className="text-xs">Pattern</Label>
+                    <Select value={asciiPattern} onValueChange={(v) => setAsciiPattern(v as AsciiPattern)}>
+                      <SelectTrigger className="bg-slate-800/50 h-8 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {asciiPatterns.map((p) => (
+                          <SelectItem key={p.value} value={p.value}>
+                            {p.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </TabsContent>
               </Tabs>
@@ -488,23 +535,190 @@ export default function Home() {
                 </div>
               )}
 
-              {/* ASCII Shape Selection */}
+              {/* ASCII Controls */}
               {type === "ascii" && (
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Shape</Label>
-                  <Select value={shape} onValueChange={setShape}>
-                    <SelectTrigger className="bg-slate-800/50 h-8 text-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {asciiShapes.map((s) => (
-                        <SelectItem key={s.value} value={s.value}>
-                          {s.label}
-                        </SelectItem>
+                <>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs">Speed</Label>
+                        <span className="text-xs text-slate-400">{asciiSpeed.toFixed(1)}</span>
+                      </div>
+                      <Slider
+                        value={[asciiSpeed]}
+                        onValueChange={([v]) => setAsciiSpeed(v)}
+                        min={0.3}
+                        max={3}
+                        step={0.1}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs">Density</Label>
+                        <span className="text-xs text-slate-400">{asciiDensity.toFixed(1)}</span>
+                      </div>
+                      <Slider
+                        value={[asciiDensity]}
+                        onValueChange={([v]) => setAsciiDensity(v)}
+                        min={0.5}
+                        max={1.5}
+                        step={0.1}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Color Mode for ASCII */}
+                  <div className="border-t border-slate-800 pt-3">
+                    <Label className="text-amber-400 mb-2 block text-xs font-medium">Color Mode</Label>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {asciiColorModes.map((mode) => (
+                        <button
+                          key={mode.value}
+                          onClick={() => setAsciiColorMode(mode.value as AsciiColorMode)}
+                          className={`px-2 py-1.5 rounded-md text-xs transition-colors ${
+                            asciiColorMode === mode.value
+                              ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                              : "bg-slate-800/50 text-slate-400 border border-slate-700"
+                          }`}
+                        >
+                          {mode.label}
+                        </button>
                       ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                    </div>
+                  </div>
+
+                  {/* Single color picker for ASCII */}
+                  {asciiColorMode === "single" && (
+                    <div className="space-y-1">
+                      <Label className="text-xs">Text Color</Label>
+                      <Input
+                        type="color"
+                        value={primaryColor}
+                        onChange={(e) => setPrimaryColor(e.target.value)}
+                        className="h-8 w-full cursor-pointer p-1"
+                      />
+                    </div>
+                  )}
+
+                  {/* Rainbow settings for ASCII */}
+                  {asciiColorMode === "rainbow" && (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-xs">Hue Start</Label>
+                            <span className="text-xs text-slate-400">{hueStart}°</span>
+                          </div>
+                          <Slider
+                            value={[hueStart]}
+                            onValueChange={([v]) => setHueStart(v)}
+                            min={0}
+                            max={360}
+                            step={5}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-xs">Hue End</Label>
+                            <span className="text-xs text-slate-400">{hueEnd}°</span>
+                          </div>
+                          <Slider
+                            value={[hueEnd]}
+                            onValueChange={([v]) => setHueEnd(v)}
+                            min={0}
+                            max={360}
+                            step={5}
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-xs">Saturation</Label>
+                            <span className="text-xs text-slate-400">{saturation}%</span>
+                          </div>
+                          <Slider
+                            value={[saturation]}
+                            onValueChange={([v]) => setSaturation(v)}
+                            min={0}
+                            max={100}
+                            step={5}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-xs">Lightness</Label>
+                            <span className="text-xs text-slate-400">{lightness}%</span>
+                          </div>
+                          <Slider
+                            value={[lightness]}
+                            onValueChange={([v]) => setLightness(v)}
+                            min={20}
+                            max={80}
+                            step={5}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setRainbowAnimate(!rainbowAnimate)}
+                          className={`flex-1 px-2 py-1.5 rounded-md text-xs transition-colors ${
+                            rainbowAnimate
+                              ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                              : "bg-slate-800/50 text-slate-400 border border-slate-700"
+                          }`}
+                        >
+                          Animate Hue
+                        </button>
+                        {rainbowAnimate && (
+                          <div className="flex-1 space-y-1">
+                            <Slider
+                              value={[rainbowSpeed]}
+                              onValueChange={([v]) => setRainbowSpeed(v)}
+                              min={0.1}
+                              max={3}
+                              step={0.1}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Background color for ASCII */}
+                  <div className="space-y-1">
+                    <Label className="text-xs">Background Color</Label>
+                    <Input
+                      type="color"
+                      value={backgroundColor}
+                      onChange={(e) => setBackgroundColor(e.target.value)}
+                      className="h-8 w-full cursor-pointer p-1"
+                    />
+                  </div>
+
+                  {/* Effects for ASCII */}
+                  <div className="border-t border-slate-800 pt-3">
+                    <Label className="text-amber-400 mb-2 block text-xs font-medium">Effects</Label>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {[
+                        { label: "Noise", value: enableNoise, setter: setEnableNoise },
+                        { label: "Vignette", value: enableVignette, setter: setEnableVignette },
+                      ].map((effect) => (
+                        <button
+                          key={effect.label}
+                          onClick={() => effect.setter(!effect.value)}
+                          className={`px-2 py-1.5 rounded-md text-xs transition-colors ${
+                            effect.value
+                              ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                              : "bg-slate-800/50 text-slate-400 border border-slate-700"
+                          }`}
+                        >
+                          {effect.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
               )}
 
               {/* Wave Field Controls */}
@@ -1118,7 +1332,7 @@ export default function Home() {
               )}
 
               {/* Color controls */}
-              {type !== "tunnel" && (
+              {type !== "tunnel" && type !== "ascii" && (
                 <div className="grid grid-cols-3 gap-2">
                   <div className="space-y-1">
                     <Label className="text-xs">Background</Label>
@@ -1283,7 +1497,7 @@ export default function Home() {
               )}
 
               {/* Seed control */}
-              {(type === "geometric" || type === "wavefield" || type === "tunnel") && (
+              {(type === "geometric" || type === "wavefield" || type === "tunnel" || type === "ascii") && (
                 <div className="flex items-center gap-2">
                   <div className="flex-1 space-y-1">
                     <Label className="text-xs">Seed</Label>

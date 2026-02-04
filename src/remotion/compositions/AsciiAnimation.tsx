@@ -4,262 +4,498 @@ import {
   useCurrentFrame,
   useVideoConfig,
   interpolate,
-  spring,
-  Img,
-  staticFile,
 } from "remotion";
+import { Noise, Vignette } from "../components/effects";
+import { getRainbowColor, RainbowConfig, defaultRainbowConfig } from "../utils/colors";
+
+type AsciiPattern =
+  | "matrix"
+  | "donut"
+  | "cube"
+  | "plasma"
+  | "tunnel"
+  | "wave"
+  | "sphere"
+  | "spiral";
+
+type ColorMode = "single" | "rainbow" | "green";
 
 interface AsciiAnimationProps {
-  text: string;
+  pattern: AsciiPattern;
   backgroundColor: string;
   textColor: string;
-  shape: "cup" | "heart" | "star" | "custom";
-  imageSrc?: string;
+  colorMode: ColorMode;
+  rainbowConfig?: RainbowConfig;
+  speed: number;
+  density: number;
+  enableNoise: boolean;
+  enableVignette: boolean;
+  seed: number;
 }
 
-// ASCII density characters from darkest to lightest
-const ASCII_CHARS = " .,:;i1tfLCG08@";
-const ASCII_CHARS_REVERSED = "@80GCLft1i;:,. ";
+// ASCII density characters from light to dark
+const ASCII_GRADIENT = " .,-~:;=!*#$@";
+const ASCII_GRADIENT_LONG = " .'`^\",:;Il!i><~+_-?][}{1)(|\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$";
 
-// Predefined shape masks - larger and more detailed
-const SHAPES: Record<string, string[]> = {
-  cup: [
-    "                                                  ",
-    "                                                  ",
-    "        ██████████████████████████████            ",
-    "        ██████████████████████████████            ",
-    "       ████████████████████████████████           ",
-    "       ████████████████████████████  ████         ",
-    "       ████████████████████████████   ████        ",
-    "       ████████████████████████████    ████       ",
-    "       ████████████████████████████   ████        ",
-    "       ████████████████████████████  ████         ",
-    "       ████████████████████████████████           ",
-    "        ██████████████████████████████            ",
-    "         ████████████████████████████             ",
-    "          ██████████████████████████              ",
-    "           ████████████████████████               ",
-    "            ██████████████████████                ",
-    "             ████████████████████                 ",
-    "              ██████████████████                  ",
-    "                ██████████████                    ",
-    "                                                  ",
-  ],
-  heart: [
-    "                                                  ",
-    "                                                  ",
-    "          ████████        ████████                ",
-    "        ████████████    ████████████              ",
-    "       ██████████████  ██████████████             ",
-    "      ████████████████████████████████            ",
-    "      ████████████████████████████████            ",
-    "      ████████████████████████████████            ",
-    "       ██████████████████████████████             ",
-    "        ████████████████████████████              ",
-    "          ████████████████████████                ",
-    "            ████████████████████                  ",
-    "              ████████████████                    ",
-    "                ████████████                      ",
-    "                  ████████                        ",
-    "                    ████                          ",
-    "                     ██                           ",
-    "                                                  ",
-    "                                                  ",
-    "                                                  ",
-  ],
-  star: [
-    "                                                  ",
-    "                       ██                         ",
-    "                      ████                        ",
-    "                     ██████                       ",
-    "                    ████████                      ",
-    "                   ██████████                     ",
-    "    ██████████████████████████████████████        ",
-    "      ████████████████████████████████            ",
-    "        ████████████████████████████              ",
-    "          ████████████████████████                ",
-    "            ██████████████████                    ",
-    "           ████████████████████                   ",
-    "          ██████████  ██████████                  ",
-    "         ████████        ████████                 ",
-    "        ████████          ████████                ",
-    "       ████████            ████████               ",
-    "      ████████              ████████              ",
-    "                                                  ",
-    "                                                  ",
-    "                                                  ",
-  ],
-};
+// Matrix-style characters
+const MATRIX_CHARS = "ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-const generateRandomChar = (seed: number, chars: string): string => {
-  const index = Math.floor(Math.abs(Math.sin(seed * 12.9898) * 43758.5453) % chars.length);
-  return chars[index];
+// Seeded random
+const seededRandom = (seed: number): number => {
+  const x = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
+  return x - Math.floor(x);
 };
 
 export const AsciiAnimation: React.FC<AsciiAnimationProps> = ({
-  text,
-  backgroundColor,
-  textColor,
-  shape,
-  imageSrc,
+  pattern = "donut",
+  backgroundColor = "#000000",
+  textColor = "#ffffff",
+  colorMode = "green",
+  rainbowConfig = defaultRainbowConfig,
+  speed = 1,
+  density = 1,
+  enableNoise = true,
+  enableVignette = true,
+  seed = 42,
 }) => {
   const frame = useCurrentFrame();
-  const { fps, width, height, durationInFrames } = useVideoConfig();
+  const { fps, width, height } = useVideoConfig();
 
-  const cols = 80;
-  const rows = 40;
+  const time = (frame / fps) * speed;
+
+  // Grid dimensions based on density
+  const baseCols = 80;
+  const baseRows = 40;
+  const cols = Math.floor(baseCols * density);
+  const rows = Math.floor(baseRows * density);
   const charWidth = width / cols;
   const charHeight = height / rows;
-  const fontSize = Math.min(charWidth, charHeight) * 1.2;
+  const fontSize = Math.min(charWidth, charHeight) * 1.3;
 
-  // Animation phases
-  const revealProgress = interpolate(frame, [0, fps * 3], [0, 1], {
-    extrapolateRight: "clamp",
-  });
+  // Generate ASCII grid based on pattern
+  const asciiGrid = useMemo(() => {
+    const grid: { char: string; brightness: number; colorIndex: number }[][] = [];
 
-  const textScrollOffset = interpolate(frame, [0, durationInFrames], [0, text.length * 2]);
-
-  const waveAmplitude = interpolate(
-    frame,
-    [fps * 2, fps * 4],
-    [0, 1],
-    { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
-  );
-
-  // Get shape mask
-  const shapeMask = useMemo(() => {
-    const mask = SHAPES[shape] || SHAPES.cup;
-    return mask;
-  }, [shape]);
-
-  // Generate the ASCII grid
-  const generateAsciiGrid = useMemo(() => {
-    const grid: { char: string; inShape: boolean; delay: number }[][] = [];
-
-    for (let row = 0; row < rows; row++) {
-      const gridRow: { char: string; inShape: boolean; delay: number }[] = [];
-
-      for (let col = 0; col < cols; col++) {
-        // Check if this cell is inside the shape
-        const maskRow = Math.floor((row / rows) * shapeMask.length);
-        const maskCol = Math.floor((col / cols) * (shapeMask[0]?.length || 30));
-        const inShape: boolean =
-          !!(shapeMask[maskRow] && shapeMask[maskRow][maskCol] === "█");
-
-        // Calculate distance from center for reveal animation
-        const centerX = cols / 2;
-        const centerY = rows / 2;
-        const distance = Math.sqrt(
-          Math.pow(col - centerX, 2) + Math.pow(row - centerY, 2)
-        );
-        const maxDistance = Math.sqrt(
-          Math.pow(centerX, 2) + Math.pow(centerY, 2)
-        );
-        const delay = distance / maxDistance;
-
-        // Generate character
-        let char: string;
-        if (inShape) {
-          // Inside shape: use text characters
-          const textIndex = Math.floor((col + row + textScrollOffset) % text.length);
-          char = text[textIndex] || " ";
-        } else {
-          // Outside shape: use ASCII density or random chars
-          const seed = row * cols + col + frame * 0.1;
-          char = generateRandomChar(seed, "01");
+    switch (pattern) {
+      case "matrix": {
+        // Matrix rain effect
+        const drops: number[] = [];
+        for (let i = 0; i < cols; i++) {
+          drops[i] = seededRandom(seed + i) * rows;
         }
 
-        gridRow.push({ char, inShape, delay });
+        for (let row = 0; row < rows; row++) {
+          const gridRow: { char: string; brightness: number; colorIndex: number }[] = [];
+          for (let col = 0; col < cols; col++) {
+            const dropSpeed = 0.3 + seededRandom(seed + col * 100) * 0.4;
+            const dropY = (drops[col] + time * 15 * dropSpeed) % (rows + 20);
+            const distFromHead = row - dropY;
+
+            let brightness = 0;
+            let char = " ";
+
+            if (distFromHead >= 0 && distFromHead < 15) {
+              // Trail
+              brightness = 1 - distFromHead / 15;
+              const charSeed = seed + row * cols + col + Math.floor(time * 10);
+              const charIndex = Math.floor(seededRandom(charSeed) * MATRIX_CHARS.length);
+              char = MATRIX_CHARS[charIndex];
+            } else if (distFromHead >= -1 && distFromHead < 0) {
+              // Head (brightest)
+              brightness = 1.2;
+              const charSeed = seed + row * cols + col + Math.floor(time * 20);
+              const charIndex = Math.floor(seededRandom(charSeed) * MATRIX_CHARS.length);
+              char = MATRIX_CHARS[charIndex];
+            }
+
+            gridRow.push({ char, brightness, colorIndex: col });
+          }
+          grid.push(gridRow);
+        }
+        break;
       }
-      grid.push(gridRow);
-    }
-    return grid;
-  }, [rows, cols, shapeMask, text, textScrollOffset, frame]);
 
-  // Dotted outline around shape - create ordered contour points
-  const outlinePoints = useMemo(() => {
-    const edgePoints: { x: number; y: number; row: number; col: number }[] = [];
-    const maskHeight = shapeMask.length;
-    const maskWidth = shapeMask[0]?.length || 50;
+      case "donut": {
+        // 3D rotating donut/torus
+        const A = time * 1.5;
+        const B = time * 0.8;
 
-    // First pass: find all edge cells
-    for (let row = 0; row < rows; row++) {
-      for (let col = 0; col < cols; col++) {
-        const maskRow = Math.floor((row / rows) * maskHeight);
-        const maskCol = Math.floor((col / cols) * maskWidth);
-        const current = shapeMask[maskRow]?.[maskCol] === "█";
+        // Z-buffer and luminance buffer
+        const zBuffer: number[][] = [];
+        const luminance: number[][] = [];
 
-        if (!current) continue;
+        for (let i = 0; i < rows; i++) {
+          zBuffer[i] = new Array(cols).fill(0);
+          luminance[i] = new Array(cols).fill(0);
+        }
 
-        // Check neighbors to see if this is an edge
-        const checkMaskRow = (r: number) => Math.floor((r / rows) * maskHeight);
-        const checkMaskCol = (c: number) => Math.floor((c / cols) * maskWidth);
+        const R1 = 1; // Radius of the tube
+        const R2 = 2; // Distance from center to tube center
+        const K2 = 5;
+        const K1 = cols * K2 * 3 / (8 * (R1 + R2));
 
-        const neighbors = [
-          shapeMask[checkMaskRow(row - 1)]?.[checkMaskCol(col)] === "█",
-          shapeMask[checkMaskRow(row + 1)]?.[checkMaskCol(col)] === "█",
-          shapeMask[checkMaskRow(row)]?.[checkMaskCol(col - 1)] === "█",
-          shapeMask[checkMaskRow(row)]?.[checkMaskCol(col + 1)] === "█",
+        // Render torus
+        for (let theta = 0; theta < 6.28; theta += 0.07) {
+          for (let phi = 0; phi < 6.28; phi += 0.02) {
+            const cosA = Math.cos(A), sinA = Math.sin(A);
+            const cosB = Math.cos(B), sinB = Math.sin(B);
+            const cosTheta = Math.cos(theta), sinTheta = Math.sin(theta);
+            const cosPhi = Math.cos(phi), sinPhi = Math.sin(phi);
+
+            const circleX = R2 + R1 * cosTheta;
+            const circleY = R1 * sinTheta;
+
+            const x = circleX * (cosB * cosPhi + sinA * sinB * sinPhi) - circleY * cosA * sinB;
+            const y = circleX * (sinB * cosPhi - sinA * cosB * sinPhi) + circleY * cosA * cosB;
+            const z = K2 + cosA * circleX * sinPhi + circleY * sinA;
+            const ooz = 1 / z;
+
+            const xp = Math.floor(cols / 2 + K1 * ooz * x);
+            const yp = Math.floor(rows / 2 - K1 * ooz * y * 0.5);
+
+            // Luminance calculation
+            const L = cosPhi * cosTheta * sinB - cosA * cosTheta * sinPhi - sinA * sinTheta + cosB * (cosA * sinTheta - cosTheta * sinA * sinPhi);
+
+            if (L > 0 && xp >= 0 && xp < cols && yp >= 0 && yp < rows) {
+              if (ooz > zBuffer[yp][xp]) {
+                zBuffer[yp][xp] = ooz;
+                luminance[yp][xp] = L;
+              }
+            }
+          }
+        }
+
+        // Convert to ASCII
+        for (let row = 0; row < rows; row++) {
+          const gridRow: { char: string; brightness: number; colorIndex: number }[] = [];
+          for (let col = 0; col < cols; col++) {
+            const L = luminance[row][col];
+            let char = " ";
+            let brightness = 0;
+
+            if (L > 0) {
+              const charIndex = Math.floor(L * 8);
+              char = ".,-~:;=!*#$@"[Math.min(charIndex, 11)];
+              brightness = L;
+            }
+
+            gridRow.push({ char, brightness, colorIndex: row + col });
+          }
+          grid.push(gridRow);
+        }
+        break;
+      }
+
+      case "cube": {
+        // 3D rotating cube
+        const rotX = time * 1.2;
+        const rotY = time * 0.9;
+        const rotZ = time * 0.5;
+
+        // Cube vertices
+        const vertices = [
+          [-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1],
+          [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1],
         ];
 
-        const isEdge = neighbors.some((n) => !n);
+        // Edges
+        const edges = [
+          [0, 1], [1, 2], [2, 3], [3, 0],
+          [4, 5], [5, 6], [6, 7], [7, 4],
+          [0, 4], [1, 5], [2, 6], [3, 7],
+        ];
 
-        if (isEdge) {
-          edgePoints.push({
-            x: (col / cols) * width + charWidth / 2,
-            y: (row / rows) * height + charHeight / 2,
-            row,
-            col,
-          });
+        // Rotation matrices
+        const cosX = Math.cos(rotX), sinX = Math.sin(rotX);
+        const cosY = Math.cos(rotY), sinY = Math.sin(rotY);
+        const cosZ = Math.cos(rotZ), sinZ = Math.sin(rotZ);
+
+        const rotate = (v: number[]): number[] => {
+          let [x, y, z] = v;
+          // Rotate X
+          let temp = y;
+          y = y * cosX - z * sinX;
+          z = temp * sinX + z * cosX;
+          // Rotate Y
+          temp = x;
+          x = x * cosY + z * sinY;
+          z = -temp * sinY + z * cosY;
+          // Rotate Z
+          temp = x;
+          x = x * cosZ - y * sinZ;
+          y = temp * sinZ + y * cosZ;
+          return [x, y, z];
+        };
+
+        // Project to 2D
+        const project = (v: number[]): [number, number] => {
+          const scale = 12;
+          const distance = 5;
+          const factor = distance / (distance + v[2]);
+          return [
+            Math.floor(cols / 2 + v[0] * scale * factor),
+            Math.floor(rows / 2 + v[1] * scale * factor * 0.5),
+          ];
+        };
+
+        // Initialize empty grid
+        const charGrid: string[][] = [];
+        for (let i = 0; i < rows; i++) {
+          charGrid[i] = new Array(cols).fill(" ");
         }
+
+        // Draw edges using Bresenham's line algorithm
+        const drawLine = (x0: number, y0: number, x1: number, y1: number, char: string) => {
+          const dx = Math.abs(x1 - x0);
+          const dy = Math.abs(y1 - y0);
+          const sx = x0 < x1 ? 1 : -1;
+          const sy = y0 < y1 ? 1 : -1;
+          let err = dx - dy;
+
+          while (true) {
+            if (x0 >= 0 && x0 < cols && y0 >= 0 && y0 < rows) {
+              charGrid[y0][x0] = char;
+            }
+            if (x0 === x1 && y0 === y1) break;
+            const e2 = 2 * err;
+            if (e2 > -dy) { err -= dy; x0 += sx; }
+            if (e2 < dx) { err += dx; y0 += sy; }
+          }
+        };
+
+        // Draw cube
+        for (const [i, j] of edges) {
+          const v1 = rotate(vertices[i]);
+          const v2 = rotate(vertices[j]);
+          const [x1, y1] = project(v1);
+          const [x2, y2] = project(v2);
+          const edgeChar = v1[2] + v2[2] > 0 ? "#" : "-";
+          drawLine(x1, y1, x2, y2, edgeChar);
+        }
+
+        // Draw vertices
+        for (const v of vertices) {
+          const rotated = rotate(v);
+          const [x, y] = project(rotated);
+          if (x >= 0 && x < cols && y >= 0 && y < rows) {
+            charGrid[y][x] = "@";
+          }
+        }
+
+        // Convert to grid format
+        for (let row = 0; row < rows; row++) {
+          const gridRow: { char: string; brightness: number; colorIndex: number }[] = [];
+          for (let col = 0; col < cols; col++) {
+            const char = charGrid[row][col];
+            gridRow.push({
+              char,
+              brightness: char === "@" ? 1 : char === "#" ? 0.8 : char === "-" ? 0.5 : 0,
+              colorIndex: row + col,
+            });
+          }
+          grid.push(gridRow);
+        }
+        break;
+      }
+
+      case "plasma": {
+        // Animated plasma effect
+        for (let row = 0; row < rows; row++) {
+          const gridRow: { char: string; brightness: number; colorIndex: number }[] = [];
+          for (let col = 0; col < cols; col++) {
+            const x = col / cols * 4;
+            const y = row / rows * 4;
+
+            // Multiple sine waves combined
+            let value = Math.sin(x * 3 + time * 2);
+            value += Math.sin(y * 2 + time * 1.5);
+            value += Math.sin((x + y) * 1.5 + time);
+            value += Math.sin(Math.sqrt(x * x + y * y) * 2 - time * 2);
+            value = (value + 4) / 8; // Normalize to 0-1
+
+            const charIndex = Math.floor(value * (ASCII_GRADIENT_LONG.length - 1));
+            const char = ASCII_GRADIENT_LONG[charIndex];
+
+            gridRow.push({
+              char,
+              brightness: value,
+              colorIndex: Math.floor(value * 360),
+            });
+          }
+          grid.push(gridRow);
+        }
+        break;
+      }
+
+      case "tunnel": {
+        // Tunnel zoom effect
+        const centerX = cols / 2;
+        const centerY = rows / 2;
+
+        for (let row = 0; row < rows; row++) {
+          const gridRow: { char: string; brightness: number; colorIndex: number }[] = [];
+          for (let col = 0; col < cols; col++) {
+            const dx = col - centerX;
+            const dy = (row - centerY) * 2; // Aspect ratio correction
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx);
+
+            // Tunnel depth calculation
+            const depth = 50 / (distance + 1);
+            const tunnelZ = depth + time * 5;
+
+            // Create ring pattern
+            const ringValue = Math.sin(tunnelZ * 2 + angle * 8) * 0.5 + 0.5;
+            const brightness = ringValue * Math.min(1, distance / 5);
+
+            const charIndex = Math.floor(brightness * (ASCII_GRADIENT.length - 1));
+            const char = distance < 2 ? " " : ASCII_GRADIENT[charIndex];
+
+            gridRow.push({
+              char,
+              brightness,
+              colorIndex: Math.floor(angle * 180 / Math.PI + 180),
+            });
+          }
+          grid.push(gridRow);
+        }
+        break;
+      }
+
+      case "wave": {
+        // 3D sine wave surface
+        for (let row = 0; row < rows; row++) {
+          const gridRow: { char: string; brightness: number; colorIndex: number }[] = [];
+          for (let col = 0; col < cols; col++) {
+            const x = (col - cols / 2) / 10;
+            const y = (row - rows / 2) / 5;
+
+            // Multiple overlapping waves
+            let z = Math.sin(x * 2 + time * 3) * Math.cos(y * 2 + time * 2);
+            z += Math.sin(Math.sqrt(x * x + y * y) * 3 - time * 4) * 0.5;
+
+            // Simple lighting
+            const dx = Math.cos(x * 2 + time * 3) * 2 * Math.cos(y * 2 + time * 2);
+            const dy = Math.sin(x * 2 + time * 3) * (-Math.sin(y * 2 + time * 2) * 2);
+            const light = (dx + dy + 2) / 4;
+
+            const brightness = Math.max(0, Math.min(1, (z + 1.5) / 3 * light));
+            const charIndex = Math.floor(brightness * (ASCII_GRADIENT_LONG.length - 1));
+            const char = ASCII_GRADIENT_LONG[Math.max(0, charIndex)];
+
+            gridRow.push({
+              char,
+              brightness,
+              colorIndex: Math.floor((z + 1.5) * 120),
+            });
+          }
+          grid.push(gridRow);
+        }
+        break;
+      }
+
+      case "sphere": {
+        // 3D rotating sphere
+        const rotY = time * 1.5;
+
+        for (let row = 0; row < rows; row++) {
+          const gridRow: { char: string; brightness: number; colorIndex: number }[] = [];
+          for (let col = 0; col < cols; col++) {
+            const x = (col - cols / 2) / (cols / 4);
+            const y = (row - rows / 2) / (rows / 4) * 2;
+
+            const r2 = x * x + y * y;
+            let char = " ";
+            let brightness = 0;
+
+            if (r2 <= 1) {
+              // Point is on sphere surface
+              const z = Math.sqrt(1 - r2);
+
+              // Rotate around Y axis
+              const rotX = x * Math.cos(rotY) + z * Math.sin(rotY);
+              const rotZ = -x * Math.sin(rotY) + z * Math.cos(rotY);
+
+              // Checker pattern on sphere
+              const u = Math.atan2(rotX, rotZ) / Math.PI;
+              const v = Math.asin(y) / (Math.PI / 2);
+              const checker = (Math.floor(u * 8) + Math.floor(v * 8)) % 2;
+
+              // Lighting (simple diffuse)
+              const lightDir = [0.5, -0.5, 0.7];
+              const mag = Math.sqrt(lightDir[0]**2 + lightDir[1]**2 + lightDir[2]**2);
+              const nx = rotX, ny = y, nz = rotZ;
+              const light = Math.max(0, (nx * lightDir[0] + ny * lightDir[1] + nz * lightDir[2]) / mag);
+
+              brightness = (light * 0.7 + 0.3) * (checker ? 1 : 0.5);
+              const charIndex = Math.floor(brightness * (ASCII_GRADIENT.length - 1));
+              char = ASCII_GRADIENT[charIndex];
+            }
+
+            gridRow.push({
+              char,
+              brightness,
+              colorIndex: Math.floor(brightness * 360),
+            });
+          }
+          grid.push(gridRow);
+        }
+        break;
+      }
+
+      case "spiral": {
+        // Animated spiral pattern
+        const centerX = cols / 2;
+        const centerY = rows / 2;
+
+        for (let row = 0; row < rows; row++) {
+          const gridRow: { char: string; brightness: number; colorIndex: number }[] = [];
+          for (let col = 0; col < cols; col++) {
+            const dx = col - centerX;
+            const dy = (row - centerY) * 2;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx);
+
+            // Spiral arms
+            const spiralAngle = angle + distance * 0.15 - time * 3;
+            const armValue = Math.sin(spiralAngle * 4) * 0.5 + 0.5;
+
+            // Fade out from center
+            const fade = Math.min(1, distance / 10);
+            const brightness = armValue * fade;
+
+            const charIndex = Math.floor(brightness * (ASCII_GRADIENT_LONG.length - 1));
+            const char = ASCII_GRADIENT_LONG[charIndex];
+
+            gridRow.push({
+              char,
+              brightness,
+              colorIndex: Math.floor(((angle / Math.PI + 1) * 180 + time * 50) % 360),
+            });
+          }
+          grid.push(gridRow);
+        }
+        break;
       }
     }
 
-    // Sort points to create a continuous outline (clockwise from top)
-    if (edgePoints.length === 0) return [];
+    return grid;
+  }, [pattern, cols, rows, time, seed]);
 
-    // Find centroid
-    const centroidX = edgePoints.reduce((sum, p) => sum + p.x, 0) / edgePoints.length;
-    const centroidY = edgePoints.reduce((sum, p) => sum + p.y, 0) / edgePoints.length;
-
-    // Sort by angle from centroid
-    const sortedPoints = edgePoints.sort((a, b) => {
-      const angleA = Math.atan2(a.y - centroidY, a.x - centroidX);
-      const angleB = Math.atan2(b.y - centroidY, b.x - centroidX);
-      return angleA - angleB;
-    });
-
-    // Sample every nth point for cleaner dots
-    const sampledPoints = sortedPoints.filter((_, i) => i % 3 === 0);
-
-    return sampledPoints.map((p) => ({ x: p.x, y: p.y }));
-  }, [shapeMask, rows, cols, width, height, charWidth, charHeight]);
-
-  const outlineProgress = interpolate(frame, [fps, fps * 3], [0, 1], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-  });
+  // Get color for a cell
+  const getCellColor = (brightness: number, colorIndex: number, row: number, col: number): string => {
+    if (colorMode === "green") {
+      // Matrix green
+      const green = Math.floor(100 + brightness * 155);
+      return `rgb(0, ${green}, 0)`;
+    } else if (colorMode === "rainbow") {
+      return getRainbowColor(colorIndex, 360, rainbowConfig, frame, fps);
+    }
+    return textColor;
+  };
 
   return (
-    <AbsoluteFill
-      style={{
-        backgroundColor,
-        overflow: "hidden",
-      }}
-    >
-      {/* Gradient overlay at bottom */}
-      <div
-        style={{
-          position: "absolute",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: "30%",
-          background: `linear-gradient(to top, ${backgroundColor}, transparent)`,
-          zIndex: 1,
-        }}
-      />
-
+    <AbsoluteFill style={{ backgroundColor, overflow: "hidden" }}>
       {/* ASCII Grid */}
       <div
         style={{
@@ -270,109 +506,67 @@ export const AsciiAnimation: React.FC<AsciiAnimationProps> = ({
           height: "100%",
           display: "flex",
           flexDirection: "column",
-          fontFamily: "monospace",
+          fontFamily: "'Courier New', 'Monaco', monospace",
           fontSize: `${fontSize}px`,
           lineHeight: `${charHeight}px`,
+          letterSpacing: "0px",
         }}
       >
-        {generateAsciiGrid.map((row, rowIndex) => (
+        {asciiGrid.map((row, rowIndex) => (
           <div
             key={rowIndex}
             style={{
               display: "flex",
               whiteSpace: "pre",
+              height: `${charHeight}px`,
             }}
           >
-            {row.map((cell, colIndex) => {
-              const cellReveal = interpolate(
-                revealProgress,
-                [cell.delay * 0.8, cell.delay * 0.8 + 0.2],
-                [0, 1],
-                { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
-              );
-
-              // Wave distortion
-              const waveOffset =
-                Math.sin((colIndex + frame * 0.1) * 0.1) * waveAmplitude * 2;
-
-              const opacity = cell.inShape
-                ? interpolate(cellReveal, [0, 1], [0.1, 1])
-                : interpolate(cellReveal, [0, 1], [0.05, 0.3]);
-
-              return (
-                <span
-                  key={colIndex}
-                  style={{
-                    width: `${charWidth}px`,
-                    textAlign: "center",
-                    color: cell.inShape ? textColor : textColor,
-                    opacity,
-                    transform: `translateY(${waveOffset}px)`,
-                    fontWeight: cell.inShape ? "bold" : "normal",
-                  }}
-                >
-                  {cell.char}
-                </span>
-              );
-            })}
+            {row.map((cell, colIndex) => (
+              <span
+                key={colIndex}
+                style={{
+                  width: `${charWidth}px`,
+                  height: `${charHeight}px`,
+                  display: "inline-block",
+                  textAlign: "center",
+                  color: getCellColor(cell.brightness, cell.colorIndex, rowIndex, colIndex),
+                  opacity: Math.max(0.1, cell.brightness),
+                  textShadow: cell.brightness > 0.7 && colorMode === "green"
+                    ? `0 0 10px rgba(0, 255, 0, ${cell.brightness * 0.5})`
+                    : "none",
+                }}
+              >
+                {cell.char}
+              </span>
+            ))}
           </div>
         ))}
       </div>
 
-      {/* Dotted outline SVG overlay */}
-      <svg
-        width={width}
-        height={height}
+      {/* Effects */}
+      {enableNoise && <Noise opacity={0.08} animated />}
+      {enableVignette && <Vignette intensity={0.6} />}
+
+      {/* Scanline effect for retro look */}
+      <div
         style={{
           position: "absolute",
           top: 0,
           left: 0,
+          right: 0,
+          bottom: 0,
+          background: `repeating-linear-gradient(
+            0deg,
+            rgba(0, 0, 0, 0.1) 0px,
+            rgba(0, 0, 0, 0.1) 1px,
+            transparent 1px,
+            transparent 3px
+          )`,
           pointerEvents: "none",
         }}
-      >
-        {outlinePoints.slice(0, Math.floor(outlinePoints.length * outlineProgress)).map((point, index) => {
-          const pulseScale = 1 + Math.sin((frame + index * 2) * 0.2) * 0.3;
-          const glowOpacity = interpolate(
-            Math.sin((frame + index) * 0.15),
-            [-1, 1],
-            [0.3, 0.8]
-          );
-
-          return (
-            <g key={index}>
-              {/* Glow */}
-              <circle
-                cx={point.x}
-                cy={point.y}
-                r={8 * pulseScale}
-                fill="#84cc16"
-                opacity={glowOpacity * 0.3}
-              />
-              {/* Main dot */}
-              <circle
-                cx={point.x}
-                cy={point.y}
-                r={4 * pulseScale}
-                fill="#84cc16"
-                opacity={glowOpacity}
-              />
-            </g>
-          );
-        })}
-
-        {/* Dashed line connecting outline points */}
-        {outlinePoints.length > 1 && (
-          <path
-            d={`M ${outlinePoints.map((p) => `${p.x},${p.y}`).join(" L ")}`}
-            fill="none"
-            stroke="#84cc16"
-            strokeWidth={2}
-            strokeDasharray="8,12"
-            strokeDashoffset={-frame * 2}
-            opacity={0.6 * outlineProgress}
-          />
-        )}
-      </svg>
+      />
     </AbsoluteFill>
   );
 };
+
+export default AsciiAnimation;
