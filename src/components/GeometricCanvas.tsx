@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useCallback } from "react";
+import React, { useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 
 type Shape = "hexagon" | "triangle" | "square" | "circle" | "star" | "pentagon" | "octagon";
 type MotionPattern = "float" | "orbital" | "bounce" | "wave" | "spiral" | "pulse";
@@ -19,13 +19,17 @@ interface GeometricCanvasProps {
   paused?: boolean;
 }
 
+export interface GeometricCanvasHandle {
+  getCanvas: () => HTMLCanvasElement | null;
+}
+
 // Seeded random
 const seededRandom = (seed: number) => {
   const x = Math.sin(seed) * 10000;
   return x - Math.floor(x);
 };
 
-export const GeometricCanvas: React.FC<GeometricCanvasProps> = ({
+export const GeometricCanvas = forwardRef<GeometricCanvasHandle, GeometricCanvasProps>(({
   shape = "hexagon",
   shapeCount = 3,
   motionPattern = "float",
@@ -37,8 +41,12 @@ export const GeometricCanvas: React.FC<GeometricCanvasProps> = ({
   enableVignette = true,
   seed = 42,
   paused = false,
-}) => {
+}, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useImperativeHandle(ref, () => ({
+    getCanvas: () => canvasRef.current,
+  }));
   const animationRef = useRef<number>(0);
   const startTimeRef = useRef<number>(0);
   const pausedTimeRef = useRef<number>(0);
@@ -320,6 +328,8 @@ export const GeometricCanvas: React.FC<GeometricCanvasProps> = ({
       style={{ width: "100%", height: "100%", display: "block" }}
     />
   );
-};
+});
+
+GeometricCanvas.displayName = "GeometricCanvas";
 
 export default GeometricCanvas;

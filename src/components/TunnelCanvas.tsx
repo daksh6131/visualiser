@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useCallback } from "react";
+import React, { useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 
 type TunnelShape = "circle" | "triangle" | "square" | "hexagon" | "star";
 type TunnelPattern = "concentric" | "starburst";
@@ -21,7 +21,11 @@ interface TunnelCanvasProps {
   paused?: boolean;
 }
 
-export const TunnelCanvas: React.FC<TunnelCanvasProps> = ({
+export interface TunnelCanvasHandle {
+  getCanvas: () => HTMLCanvasElement | null;
+}
+
+export const TunnelCanvas = forwardRef<TunnelCanvasHandle, TunnelCanvasProps>(({
   shape = "circle",
   pattern = "concentric",
   layerCount = 30,
@@ -35,8 +39,12 @@ export const TunnelCanvas: React.FC<TunnelCanvasProps> = ({
   saturation = 80,
   lightness = 60,
   paused = false,
-}) => {
+}, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useImperativeHandle(ref, () => ({
+    getCanvas: () => canvasRef.current,
+  }));
   const animationRef = useRef<number>(0);
   const startTimeRef = useRef<number>(0);
   const pausedTimeRef = useRef<number>(0);
@@ -219,6 +227,8 @@ export const TunnelCanvas: React.FC<TunnelCanvasProps> = ({
       style={{ width: "100%", height: "100%", display: "block" }}
     />
   );
-};
+});
+
+TunnelCanvas.displayName = "TunnelCanvas";
 
 export default TunnelCanvas;

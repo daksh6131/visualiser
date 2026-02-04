@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -14,11 +14,12 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
 // Direct canvas components for 60fps performance
-import { ShaderCanvas } from "@/components/ShaderCanvas";
-import { TunnelCanvas } from "@/components/TunnelCanvas";
-import { WaveCanvas } from "@/components/WaveCanvas";
-import { GeometricCanvas } from "@/components/GeometricCanvas";
-import { AsciiCanvas } from "@/components/AsciiCanvas";
+import { ShaderCanvas, ShaderCanvasHandle } from "@/components/ShaderCanvas";
+import { TunnelCanvas, TunnelCanvasHandle } from "@/components/TunnelCanvas";
+import { WaveCanvas, WaveCanvasHandle } from "@/components/WaveCanvas";
+import { GeometricCanvas, GeometricCanvasHandle } from "@/components/GeometricCanvas";
+import { AsciiCanvas, AsciiCanvasHandle } from "@/components/AsciiCanvas";
+import { DownloadButton } from "@/components/DownloadButton";
 
 // Reusable slider with input component
 interface SliderWithInputProps {
@@ -133,6 +134,46 @@ type AnimationType = "geometric" | "wavefield" | "ascii" | "tunnel" | "shader";
 export default function Home() {
   const [type, setType] = useState<AnimationType>("shader");
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // Canvas refs for video recording
+  const shaderCanvasRef = useRef<ShaderCanvasHandle>(null);
+  const tunnelCanvasRef = useRef<TunnelCanvasHandle>(null);
+  const waveCanvasRef = useRef<WaveCanvasHandle>(null);
+  const geometricCanvasRef = useRef<GeometricCanvasHandle>(null);
+  const asciiCanvasRef = useRef<AsciiCanvasHandle>(null);
+
+  // Get the currently active canvas element
+  const getActiveCanvas = useCallback(() => {
+    switch (type) {
+      case "shader":
+        return shaderCanvasRef.current?.getCanvas() ?? null;
+      case "tunnel":
+        return tunnelCanvasRef.current?.getCanvas() ?? null;
+      case "wavefield":
+        return waveCanvasRef.current?.getCanvas() ?? null;
+      case "geometric":
+        return geometricCanvasRef.current?.getCanvas() ?? null;
+      case "ascii":
+        return asciiCanvasRef.current?.getCanvas() ?? null;
+      default:
+        return null;
+    }
+  }, [type]);
+
+  // Create a ref that always points to the active canvas
+  const activeCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Update the active canvas ref when type changes or components mount
+  const updateActiveCanvasRef = useCallback(() => {
+    activeCanvasRef.current = getActiveCanvas();
+  }, [getActiveCanvas]);
+
+  // Use effect to update active canvas ref
+  useEffect(() => {
+    // Small delay to ensure canvas is mounted
+    const timer = setTimeout(updateActiveCanvasRef, 100);
+    return () => clearTimeout(timer);
+  }, [type, updateActiveCanvasRef]);
 
   // Shared
   const [seed, setSeed] = useState(42);
@@ -257,6 +298,7 @@ export default function Home() {
         <div className="absolute inset-0">
           {type === "ascii" && (
             <AsciiCanvas
+              ref={asciiCanvasRef}
               pattern={asciiPattern as any}
               speed={asciiSpeed}
               density={asciiDensity}
@@ -277,6 +319,7 @@ export default function Home() {
           )}
           {type === "wavefield" && (
             <WaveCanvas
+              ref={waveCanvasRef}
               pattern={wavePattern as any}
               lineCount={lineCount}
               amplitude={waveAmplitude}
@@ -293,6 +336,7 @@ export default function Home() {
           )}
           {type === "tunnel" && (
             <TunnelCanvas
+              ref={tunnelCanvasRef}
               shape={tunnelShape as any}
               pattern={tunnelPatternType as any}
               layerCount={layerCount}
@@ -309,6 +353,7 @@ export default function Home() {
           )}
           {type === "geometric" && (
             <GeometricCanvas
+              ref={geometricCanvasRef}
               shape={geoShape as any}
               shapeCount={shapeCount}
               motionPattern={motionPattern as any}
@@ -323,6 +368,7 @@ export default function Home() {
           )}
           {type === "shader" && (
             <ShaderCanvas
+              ref={shaderCanvasRef}
               pattern={shaderPattern as any}
               speed={shaderSpeed}
               complexity={shaderComplexity}
@@ -604,6 +650,7 @@ export default function Home() {
             >
               Randomize
             </Button>
+            <DownloadButton canvasRef={activeCanvasRef} />
           </div>
         </div>
 

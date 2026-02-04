@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useCallback } from "react";
+import React, { useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 
 type WavePattern = "waves" | "spiral" | "vortex" | "terrain" | "ripple" | "fabric";
 type ColorMode = "rainbow" | "single";
@@ -21,7 +21,11 @@ interface WaveCanvasProps {
   paused?: boolean;
 }
 
-export const WaveCanvas: React.FC<WaveCanvasProps> = ({
+export interface WaveCanvasHandle {
+  getCanvas: () => HTMLCanvasElement | null;
+}
+
+export const WaveCanvas = forwardRef<WaveCanvasHandle, WaveCanvasProps>(({
   pattern = "waves",
   lineCount = 40,
   amplitude = 50,
@@ -35,8 +39,12 @@ export const WaveCanvas: React.FC<WaveCanvasProps> = ({
   saturation = 80,
   lightness = 60,
   paused = false,
-}) => {
+}, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useImperativeHandle(ref, () => ({
+    getCanvas: () => canvasRef.current,
+  }));
   const animationRef = useRef<number>(0);
   const startTimeRef = useRef<number>(0);
   const pausedTimeRef = useRef<number>(0);
@@ -216,6 +224,8 @@ export const WaveCanvas: React.FC<WaveCanvasProps> = ({
       style={{ width: "100%", height: "100%", display: "block" }}
     />
   );
-};
+});
+
+WaveCanvas.displayName = "WaveCanvas";
 
 export default WaveCanvas;

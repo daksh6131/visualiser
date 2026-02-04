@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useImperativeHandle, forwardRef } from "react";
 
 type ShaderPatternType =
   | "hypnotic"
@@ -352,8 +352,16 @@ const patternIndexMap: Record<ShaderPatternType, number> = {
   waves: 7,
 };
 
-export const ShaderCanvas: React.FC<ShaderCanvasProps> = (props) => {
+export interface ShaderCanvasHandle {
+  getCanvas: () => HTMLCanvasElement | null;
+}
+
+export const ShaderCanvas = forwardRef<ShaderCanvasHandle, ShaderCanvasProps>((props, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useImperativeHandle(ref, () => ({
+    getCanvas: () => canvasRef.current,
+  }));
   const stateRef = useRef<{
     gl: WebGLRenderingContext | null;
     program: WebGLProgram | null;
@@ -506,6 +514,8 @@ export const ShaderCanvas: React.FC<ShaderCanvasProps> = (props) => {
       style={{ width: "100%", height: "100%", display: "block", background: "#000" }}
     />
   );
-};
+});
+
+ShaderCanvas.displayName = "ShaderCanvas";
 
 export default ShaderCanvas;

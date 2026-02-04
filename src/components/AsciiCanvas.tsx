@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useCallback } from "react";
+import React, { useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 
 type AsciiPattern = "donut" | "matrix" | "cube" | "sphere" | "plasma" | "tunnel" | "wave" | "spiral";
 type ColorMode = "green" | "single" | "rainbow";
@@ -25,10 +25,14 @@ interface AsciiCanvasProps {
   paused?: boolean;
 }
 
+export interface AsciiCanvasHandle {
+  getCanvas: () => HTMLCanvasElement | null;
+}
+
 const ASCII_CHARS = ".,-~:;=!*#$@";
 const MATRIX_CHARS = "ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍ0123456789";
 
-export const AsciiCanvas: React.FC<AsciiCanvasProps> = ({
+export const AsciiCanvas = forwardRef<AsciiCanvasHandle, AsciiCanvasProps>(({
   pattern = "donut",
   speed = 1,
   density = 1,
@@ -46,8 +50,12 @@ export const AsciiCanvas: React.FC<AsciiCanvasProps> = ({
   autoRotateSpeedY = 1,
   autoRotateSpeedZ = 0,
   paused = false,
-}) => {
+}, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useImperativeHandle(ref, () => ({
+    getCanvas: () => canvasRef.current,
+  }));
   const animationRef = useRef<number>(0);
   const startTimeRef = useRef<number>(0);
   const pausedTimeRef = useRef<number>(0);
@@ -484,6 +492,8 @@ export const AsciiCanvas: React.FC<AsciiCanvasProps> = ({
       style={{ width: "100%", height: "100%", display: "block", backgroundColor: "#000" }}
     />
   );
-};
+});
+
+AsciiCanvas.displayName = "AsciiCanvas";
 
 export default AsciiCanvas;
