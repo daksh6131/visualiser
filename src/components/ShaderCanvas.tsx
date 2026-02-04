@@ -106,7 +106,7 @@ const fragmentShaderSource = `
     for (int j = -1; j <= 1; j++) {
       for (int i = -1; i <= 1; i++) {
         vec2 neighbor = vec2(float(i), float(j));
-        vec2 point = hash2(n + neighbor + u_seed) + 0.5 * sin(u_time * 0.5 + TAU * hash2(n + neighbor));
+        vec2 point = hash2(n + neighbor + vec2(u_seed)) + 0.5 * sin(u_time * 0.5 + TAU * hash2(n + neighbor + vec2(u_seed)));
         point = 0.5 + 0.5 * sin(u_time * 0.3 + TAU * point);
         vec2 diff = neighbor + point - f;
         float dist = length(diff);
