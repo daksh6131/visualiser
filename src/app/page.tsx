@@ -21,6 +21,87 @@ import { GeometricCanvas, GeometricCanvasHandle } from "@/components/GeometricCa
 import { AsciiCanvas, AsciiCanvasHandle } from "@/components/AsciiCanvas";
 import { DownloadButton } from "@/components/DownloadButton";
 
+// Design state interface for save/load
+interface DesignState {
+  // Type
+  t: string;
+  // Shared
+  s: number; // seed
+  n: number; // enableNoise (0/1)
+  v: number; // enableVignette (0/1)
+  // Rainbow
+  hs: number; // hueStart
+  he: number; // hueEnd
+  sat: number; // saturation
+  lit: number; // lightness
+  // ASCII
+  ap?: string; // asciiPattern
+  as?: number; // asciiSpeed
+  ad?: number; // asciiDensity
+  acm?: string; // asciiColorMode
+  ac?: string; // asciiColor
+  rx?: number; // rotationX
+  ry?: number; // rotationY
+  rz?: number; // rotationZ
+  ar?: number; // autoRotate (0/1)
+  arx?: number; // autoRotateSpeedX
+  ary?: number; // autoRotateSpeedY
+  arz?: number; // autoRotateSpeedZ
+  // Wave
+  wp?: string; // wavePattern
+  wl?: number; // lineCount
+  wa?: number; // waveAmplitude
+  wf?: number; // waveFrequency
+  ws?: number; // waveSpeed
+  wpe?: number; // wavePerspective
+  wcm?: string; // waveColorMode
+  wc?: string; // waveColor
+  // Tunnel
+  ts?: string; // tunnelShape
+  tp?: string; // tunnelPatternType
+  zs?: number; // zoomSpeed
+  zd?: string; // zoomDirection
+  lc?: number; // layerCount
+  tr?: number; // tunnelRotation
+  eg?: number; // enableGlow (0/1)
+  gi?: number; // glowIntensity
+  // Geometric
+  gs?: string; // geoShape
+  sc?: number; // shapeCount
+  mp?: string; // motionPattern
+  ms?: number; // motionSpeed
+  pc?: string; // primaryColor
+  acc?: string; // accentColor
+  bg?: string; // bgColor
+  // Shader
+  sp?: string; // shaderPattern
+  ss?: number; // shaderSpeed
+  sco?: number; // shaderComplexity
+  sca?: string; // shaderColorA
+  scb?: string; // shaderColorB
+  scc?: string; // shaderColorC
+  ssy?: number; // shaderSymmetry
+  sz?: number; // shaderZoom
+  sr?: number; // shaderRotation
+}
+
+// Encode design state to URL-safe string
+const encodeDesign = (state: DesignState): string => {
+  return btoa(JSON.stringify(state)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+};
+
+// Decode URL-safe string to design state
+const decodeDesign = (encoded: string): DesignState | null => {
+  try {
+    const padded = encoded.replace(/-/g, '+').replace(/_/g, '/');
+    const padding = (4 - (padded.length % 4)) % 4;
+    const base64 = padded + '='.repeat(padding);
+    return JSON.parse(atob(base64));
+  } catch {
+    return null;
+  }
+};
+
 // Reusable slider with input component
 interface SliderWithInputProps {
   label: string;
@@ -240,6 +321,175 @@ export default function Home() {
   const [hueEnd, setHueEnd] = useState(360);
   const [saturation, setSaturation] = useState(80);
   const [lightness, setLightness] = useState(60);
+
+  // Share link copied state
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  // Load design from URL on mount
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const params = new URLSearchParams(window.location.search);
+    const designParam = params.get('d');
+
+    if (designParam) {
+      const state = decodeDesign(designParam);
+      if (state) {
+        // Type
+        if (state.t) setType(state.t as AnimationType);
+        // Shared
+        if (state.s !== undefined) setSeed(state.s);
+        if (state.n !== undefined) setEnableNoise(state.n === 1);
+        if (state.v !== undefined) setEnableVignette(state.v === 1);
+        // Rainbow
+        if (state.hs !== undefined) setHueStart(state.hs);
+        if (state.he !== undefined) setHueEnd(state.he);
+        if (state.sat !== undefined) setSaturation(state.sat);
+        if (state.lit !== undefined) setLightness(state.lit);
+        // ASCII
+        if (state.ap) setAsciiPattern(state.ap);
+        if (state.as !== undefined) setAsciiSpeed(state.as);
+        if (state.ad !== undefined) setAsciiDensity(state.ad);
+        if (state.acm) setAsciiColorMode(state.acm);
+        if (state.ac) setAsciiColor(state.ac);
+        if (state.rx !== undefined) setRotationX(state.rx);
+        if (state.ry !== undefined) setRotationY(state.ry);
+        if (state.rz !== undefined) setRotationZ(state.rz);
+        if (state.ar !== undefined) setAutoRotate(state.ar === 1);
+        if (state.arx !== undefined) setAutoRotateSpeedX(state.arx);
+        if (state.ary !== undefined) setAutoRotateSpeedY(state.ary);
+        if (state.arz !== undefined) setAutoRotateSpeedZ(state.arz);
+        // Wave
+        if (state.wp) setWavePattern(state.wp);
+        if (state.wl !== undefined) setLineCount(state.wl);
+        if (state.wa !== undefined) setWaveAmplitude(state.wa);
+        if (state.wf !== undefined) setWaveFrequency(state.wf);
+        if (state.ws !== undefined) setWaveSpeed(state.ws);
+        if (state.wpe !== undefined) setWavePerspective(state.wpe);
+        if (state.wcm) setWaveColorMode(state.wcm);
+        if (state.wc) setWaveColor(state.wc);
+        // Tunnel
+        if (state.ts) setTunnelShape(state.ts);
+        if (state.tp) setTunnelPatternType(state.tp);
+        if (state.zs !== undefined) setZoomSpeed(state.zs);
+        if (state.zd) setZoomDirection(state.zd);
+        if (state.lc !== undefined) setLayerCount(state.lc);
+        if (state.tr !== undefined) setTunnelRotation(state.tr);
+        if (state.eg !== undefined) setEnableGlow(state.eg === 1);
+        if (state.gi !== undefined) setGlowIntensity(state.gi);
+        // Geometric
+        if (state.gs) setGeoShape(state.gs);
+        if (state.sc !== undefined) setShapeCount(state.sc);
+        if (state.mp) setMotionPattern(state.mp);
+        if (state.ms !== undefined) setMotionSpeed(state.ms);
+        if (state.pc) setPrimaryColor(state.pc);
+        if (state.acc) setAccentColor(state.acc);
+        if (state.bg) setBgColor(state.bg);
+        // Shader
+        if (state.sp) setShaderPattern(state.sp);
+        if (state.ss !== undefined) setShaderSpeed(state.ss);
+        if (state.sco !== undefined) setShaderComplexity(state.sco);
+        if (state.sca) setShaderColorA(state.sca);
+        if (state.scb) setShaderColorB(state.scb);
+        if (state.scc) setShaderColorC(state.scc);
+        if (state.ssy !== undefined) setShaderSymmetry(state.ssy);
+        if (state.sz !== undefined) setShaderZoom(state.sz);
+        if (state.sr !== undefined) setShaderRotation(state.sr);
+      }
+    }
+  }, []);
+
+  // Generate shareable URL
+  const getShareUrl = useCallback(() => {
+    const state: DesignState = {
+      t: type,
+      s: seed,
+      n: enableNoise ? 1 : 0,
+      v: enableVignette ? 1 : 0,
+      hs: hueStart,
+      he: hueEnd,
+      sat: saturation,
+      lit: lightness,
+    };
+
+    // Add type-specific state
+    if (type === 'ascii') {
+      state.ap = asciiPattern;
+      state.as = asciiSpeed;
+      state.ad = asciiDensity;
+      state.acm = asciiColorMode;
+      state.ac = asciiColor;
+      state.rx = rotationX;
+      state.ry = rotationY;
+      state.rz = rotationZ;
+      state.ar = autoRotate ? 1 : 0;
+      state.arx = autoRotateSpeedX;
+      state.ary = autoRotateSpeedY;
+      state.arz = autoRotateSpeedZ;
+    } else if (type === 'wavefield') {
+      state.wp = wavePattern;
+      state.wl = lineCount;
+      state.wa = waveAmplitude;
+      state.wf = waveFrequency;
+      state.ws = waveSpeed;
+      state.wpe = wavePerspective;
+      state.wcm = waveColorMode;
+      state.wc = waveColor;
+    } else if (type === 'tunnel') {
+      state.ts = tunnelShape;
+      state.tp = tunnelPatternType;
+      state.zs = zoomSpeed;
+      state.zd = zoomDirection;
+      state.lc = layerCount;
+      state.tr = tunnelRotation;
+      state.eg = enableGlow ? 1 : 0;
+      state.gi = glowIntensity;
+    } else if (type === 'geometric') {
+      state.gs = geoShape;
+      state.sc = shapeCount;
+      state.mp = motionPattern;
+      state.ms = motionSpeed;
+      state.pc = primaryColor;
+      state.acc = accentColor;
+      state.bg = bgColor;
+    } else if (type === 'shader') {
+      state.sp = shaderPattern;
+      state.ss = shaderSpeed;
+      state.sco = shaderComplexity;
+      state.sca = shaderColorA;
+      state.scb = shaderColorB;
+      state.scc = shaderColorC;
+      state.ssy = shaderSymmetry;
+      state.sz = shaderZoom;
+      state.sr = shaderRotation;
+    }
+
+    const encoded = encodeDesign(state);
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin + window.location.pathname : '';
+    return `${baseUrl}?d=${encoded}`;
+  }, [
+    type, seed, enableNoise, enableVignette, hueStart, hueEnd, saturation, lightness,
+    asciiPattern, asciiSpeed, asciiDensity, asciiColorMode, asciiColor,
+    rotationX, rotationY, rotationZ, autoRotate, autoRotateSpeedX, autoRotateSpeedY, autoRotateSpeedZ,
+    wavePattern, lineCount, waveAmplitude, waveFrequency, waveSpeed, wavePerspective, waveColorMode, waveColor,
+    tunnelShape, tunnelPatternType, zoomSpeed, zoomDirection, layerCount, tunnelRotation, enableGlow, glowIntensity,
+    geoShape, shapeCount, motionPattern, motionSpeed, primaryColor, accentColor, bgColor,
+    shaderPattern, shaderSpeed, shaderComplexity, shaderColorA, shaderColorB, shaderColorC, shaderSymmetry, shaderZoom, shaderRotation
+  ]);
+
+  // Copy share link to clipboard
+  const copyShareLink = useCallback(async () => {
+    const url = getShareUrl();
+    try {
+      await navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+      // Also update URL without reload
+      window.history.replaceState({}, '', url);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  }, [getShareUrl]);
 
   const randomize = () => {
     setSeed(Math.floor(Math.random() * 10000));
@@ -649,6 +899,14 @@ export default function Home() {
               className="text-sm bg-neutral-200 text-neutral-900 hover:bg-white"
             >
               Randomize
+            </Button>
+            <Button
+              onClick={copyShareLink}
+              size="sm"
+              variant="outline"
+              className="text-sm bg-neutral-800 border-neutral-700 text-neutral-300 hover:bg-neutral-700 hover:text-white"
+            >
+              {linkCopied ? "Copied!" : "Share"}
             </Button>
             <DownloadButton canvasRef={activeCanvasRef} />
           </div>
