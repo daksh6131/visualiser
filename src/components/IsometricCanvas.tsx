@@ -460,11 +460,13 @@ export const IsometricCanvas = forwardRef<IsometricCanvasHandle, IsometricCanvas
         ctx.fillStyle = p.backgroundColor;
         ctx.fillRect(0, 0, width, height);
 
-        // Calculate rotation angle (add auto-rotation if enabled)
+        // Calculate rotation angle around Z-axis (add auto-rotation if enabled)
         const rotationDeg = p.autoRotate
           ? (p.rotation + elapsed * p.autoRotateSpeed * 60) % 360
           : p.rotation;
         const rotationRad = (rotationDeg * Math.PI) / 180;
+        const cosR = Math.cos(rotationRad);
+        const sinR = Math.sin(rotationRad);
 
         // Calculate tile dimensions
         const tileWidth = p.cubeSize * 2;
@@ -474,15 +476,12 @@ export const IsometricCanvas = forwardRef<IsometricCanvasHandle, IsometricCanvas
         const gridPixelHeight = p.gridSize * tileHeight;
         const maxCubeHeight = p.cubeSize * p.heightScale;
 
-        // Center the grid (before rotation)
+        // Center the grid
         const originX = width / 2;
         const originY = height / 2 - gridPixelHeight / 4 + maxCubeHeight / 2;
 
-        // Apply canvas rotation around center
-        ctx.save();
-        ctx.translate(width / 2, height / 2);
-        ctx.rotate(rotationRad);
-        ctx.translate(-width / 2, -height / 2);
+        // Grid center for rotation
+        const gridCenter = (p.gridSize - 1) / 2;
 
         // Enable glow if configured
         if (p.enableGlow) {
@@ -492,77 +491,102 @@ export const IsometricCanvas = forwardRef<IsometricCanvasHandle, IsometricCanvas
           ctx.shadowBlur = 0;
         }
 
-        // Painter's algorithm: draw back to front
-        // Iterate in diagonal bands from top-left to bottom-right
-        for (let sum = 0; sum < p.gridSize * 2 - 1; sum++) {
-          for (let gridX = 0; gridX < p.gridSize; gridX++) {
-            const gridY = sum - gridX;
-            if (gridY < 0 || gridY >= p.gridSize) continue;
+        // Create array of cubes with rotated grid positions for Z-axis rotation
+        const cubes: Array<{
+          gridX: number;
+          gridY: number;
+          rotatedX: number;
+          rotatedY: number;
+          sortKey: number;
+        }> = [];
 
-            // Calculate height for this cube
-            const normalizedHeight = getHeight(
-              gridX,
-              gridY,
-              p.gridSize,
-              elapsed,
-              p.heightPattern as HeightPattern,
-              p.heightScale,
-              p.noiseScale,
-              p.seed
-            );
-            const cubeHeightPx = normalizedHeight * p.cubeSize;
+        for (let gridX = 0; gridX < p.gridSize; gridX++) {
+          for (let gridY = 0; gridY < p.gridSize; gridY++) {
+            // Center the grid around origin for rotation
+            const centeredX = gridX - gridCenter;
+            const centeredY = gridY - gridCenter;
 
-            // Get screen position
-            const { x: screenX, y: screenY } = gridToScreen(
-              gridX,
-              gridY,
-              cubeHeightPx,
-              tileWidth,
-              tileHeight,
-              originX,
-              originY
-            );
+            // Rotate grid coordinates around Z-axis (in the XY plane)
+            const rotatedX = centeredX * cosR - centeredY * sinR + gridCenter;
+            const rotatedY = centeredX * sinR + centeredY * cosR + gridCenter;
 
-            // Determine cube color
-            const cubeColor = getCubeColor(
-              gridX,
-              gridY,
-              normalizedHeight,
-              p.heightScale,
-              elapsed,
-              p.colorMode as ColorMode,
-              p.baseColor,
-              p.hueStart,
-              p.hueEnd,
-              p.saturation,
-              p.lightness,
-              p.gridSize
-            );
+            // Sort key for painter's algorithm: back-to-front based on rotated position
+            const sortKey = rotatedX + rotatedY;
 
-            // Calculate face colors with shading
-            const topColor = shadeColor(cubeColor, p.topShade);
-            const leftColor = shadeColor(cubeColor, p.leftShade);
-            const rightColor = shadeColor(cubeColor, p.rightShade);
-
-            // Draw the cube
-            drawCube(
-              ctx,
-              screenX,
-              screenY,
-              tileWidth,
-              tileHeight,
-              cubeHeightPx,
-              topColor,
-              leftColor,
-              rightColor,
-              p.strokeColor,
-              p.strokeWidth
-            );
+            cubes.push({ gridX, gridY, rotatedX, rotatedY, sortKey });
           }
         }
 
-        // Restore canvas state (removes rotation transform)
-        ctx.restore();
+        // Sort back to front (lower sortKey = further back = draw first)
+        cubes.sort((a, b) => a.sortKey - b.sortKey);
+
+        // Draw cubes in sorted order
+        for (const cube of cubes) {
+          const { gridX, gridY, rotatedX, rotatedY } = cube;
+
+          // Calculate height using original grid position (terrain stays with grid)
+          const normalizedHeight = getHeight(
+            gridX,
+            gridY,
+            p.gridSize,
+            elapsed,
+            p.heightPattern as HeightPattern,
+            p.heightScale,
+            p.noiseScale,
+            p.seed
+          );
+          const cubeHeightPx = normalizedHeight * p.cubeSize;
+
+          // Get screen position using rotated grid coordinates
+          const { x: screenX, y: screenY } = gridToScreen(
+            rotatedX,
+            rotatedY,
+            cubeHeightPx,
+            tileWidth,
+            tileHeight,
+            originX,
+            originY
+          );
+
+          // Determine cube color using original grid position
+          const cubeColor = getCubeColor(
+            gridX,
+            gridY,
+            normalizedHeight,
+            p.heightScale,
+            elapsed,
+            p.colorMode as ColorMode,
+            p.baseColor,
+            p.hueStart,
+            p.hueEnd,
+            p.saturation,
+            p.lightness,
+            p.gridSize
+          );
+
+          // Calculate face colors with shading
+          const topColor = shadeColor(cubeColor, p.topShade);
+          const leftColor = shadeColor(cubeColor, p.leftShade);
+          const rightColor = shadeColor(cubeColor, p.rightShade);
+
+          // Draw the cube
+          drawCube(
+            ctx,
+            screenX,
+            screenY,
+            tileWidth,
+            tileHeight,
+            cubeHeightPx,
+            topColor,
+            leftColor,
+            rightColor,
+            p.strokeColor,
+            p.strokeWidth
+          );
+        }
+
+        // Reset shadow
+        ctx.shadowBlur = 0;
 
         animationRef.current = requestAnimationFrame(render);
       },
