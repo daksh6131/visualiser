@@ -91,6 +91,9 @@ interface DesignState {
   irs?: number; // rightShade
   ieg?: number; // enableGlow (0/1)
   igi?: number; // glowIntensity
+  iro?: number; // rotation
+  iar?: number; // autoRotate (0/1)
+  iars?: number; // autoRotateSpeed
 }
 
 // Encode design state to URL-safe string
@@ -410,6 +413,9 @@ export default function Home() {
   const [isometricRightShade, setIsometricRightShade] = useState(0.5);
   const [isometricEnableGlow, setIsometricEnableGlow] = useState(false);
   const [isometricGlowIntensity, setIsometricGlowIntensity] = useState(1);
+  const [isometricRotation, setIsometricRotation] = useState(0);
+  const [isometricAutoRotate, setIsometricAutoRotate] = useState(false);
+  const [isometricAutoRotateSpeed, setIsometricAutoRotateSpeed] = useState(0.3);
 
   // Rainbow config
   const [hueStart, setHueStart] = useState(0);
@@ -498,6 +504,9 @@ export default function Home() {
         if (state.irs !== undefined) setIsometricRightShade(state.irs);
         if (state.ieg !== undefined) setIsometricEnableGlow(state.ieg === 1);
         if (state.igi !== undefined) setIsometricGlowIntensity(state.igi);
+        if (state.iro !== undefined) setIsometricRotation(state.iro);
+        if (state.iar !== undefined) setIsometricAutoRotate(state.iar === 1);
+        if (state.iars !== undefined) setIsometricAutoRotateSpeed(state.iars);
       }
     }
   }, []);
@@ -573,6 +582,9 @@ export default function Home() {
       state.irs = isometricRightShade;
       state.ieg = isometricEnableGlow ? 1 : 0;
       state.igi = isometricGlowIntensity;
+      state.iro = isometricRotation;
+      state.iar = isometricAutoRotate ? 1 : 0;
+      state.iars = isometricAutoRotateSpeed;
     }
 
     const encoded = encodeDesign(state);
@@ -587,7 +599,8 @@ export default function Home() {
     shaderPattern, shaderSpeed, shaderComplexity, shaderColorA, shaderColorB, shaderColorC, shaderSymmetry, shaderZoom, shaderRotation,
     isometricPattern, isometricGridSize, isometricCubeSize, isometricHeightScale, isometricSpeed, isometricNoiseScale,
     isometricBaseColor, isometricStrokeColor, isometricStrokeWidth, isometricColorMode,
-    isometricTopShade, isometricLeftShade, isometricRightShade, isometricEnableGlow, isometricGlowIntensity
+    isometricTopShade, isometricLeftShade, isometricRightShade, isometricEnableGlow, isometricGlowIntensity,
+    isometricRotation, isometricAutoRotate, isometricAutoRotateSpeed
   ]);
 
   // Copy share link to clipboard
@@ -718,6 +731,11 @@ export default function Home() {
       // Glow: occasional, subtle
       setIsometricEnableGlow(Math.random() > 0.7);
       setIsometricGlowIntensity(0.5 + Math.random() * 0.8);
+
+      // Rotation: random starting angle, occasional auto-rotate
+      setIsometricRotation(Math.floor(Math.random() * 360));
+      setIsometricAutoRotate(Math.random() > 0.6);
+      setIsometricAutoRotateSpeed(0.1 + Math.random() * 0.4);
     }
 
     // Randomize rainbow
@@ -836,6 +854,9 @@ export default function Home() {
               rightShade={isometricRightShade}
               enableGlow={isometricEnableGlow}
               glowIntensity={isometricGlowIntensity}
+              rotation={isometricRotation}
+              autoRotate={isometricAutoRotate}
+              autoRotateSpeed={isometricAutoRotateSpeed}
               hueStart={hueStart}
               hueEnd={hueEnd}
               saturation={saturation}
@@ -1782,6 +1803,40 @@ export default function Home() {
                         min={0.3}
                         max={2}
                         step={0.1}
+                      />
+                    )}
+                    <div className="col-span-2 md:col-span-4 lg:col-span-6 border-t border-neutral-700 pt-3 mt-2">
+                      <div className="flex items-center gap-3 mb-3">
+                        <Label className="text-xs text-neutral-300 font-medium">Rotation</Label>
+                        <label className="flex items-center gap-1.5 text-xs text-neutral-400">
+                          <input
+                            type="checkbox"
+                            checked={isometricAutoRotate}
+                            onChange={(e) => setIsometricAutoRotate(e.target.checked)}
+                            className="rounded border-neutral-600"
+                          />
+                          Auto-rotate
+                        </label>
+                      </div>
+                    </div>
+                    <SliderWithInput
+                      label="Rotation"
+                      value={isometricRotation}
+                      onChange={setIsometricRotation}
+                      min={0}
+                      max={360}
+                      step={5}
+                      decimals={0}
+                    />
+                    {isometricAutoRotate && (
+                      <SliderWithInput
+                        label="Rotate Speed"
+                        value={isometricAutoRotateSpeed}
+                        onChange={setIsometricAutoRotateSpeed}
+                        min={0.05}
+                        max={1}
+                        step={0.05}
+                        decimals={2}
                       />
                     )}
                   </>
