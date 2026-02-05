@@ -2,8 +2,11 @@
 
 import React, { useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 
-type AsciiPattern = "donut" | "matrix" | "cube" | "sphere" | "plasma" | "tunnel" | "wave" | "spiral" | "image";
-type ColorMode = "green" | "single" | "rainbow";
+type AsciiPattern = "donut" | "matrix" | "cube" | "sphere" | "plasma" | "tunnel" | "wave" | "spiral" | "image" | "fire" | "rain" | "starfield";
+type ColorMode = "green" | "single" | "rainbow" | "grayscale" | "neon";
+type CharacterSet = "standard" | "detailed" | "blocks" | "binary" | "minimal" | "braille" | "japanese" | "arrows" | "custom";
+type FontFamily = "monospace" | "courier" | "consolas" | "firacode" | "jetbrains";
+type RenderMode = "normal" | "edges" | "dither" | "contrast";
 
 interface AsciiCanvasProps {
   pattern: AsciiPattern;
@@ -23,17 +26,52 @@ interface AsciiCanvasProps {
   autoRotateSpeedY: number;
   autoRotateSpeedZ: number;
   paused?: boolean;
-  imageData?: string; // Base64 encoded image for "image" pattern
-  imageInvert?: boolean; // Invert brightness for image
-  imageAnimate?: boolean; // Enable wave animation on image
+  imageData?: string;
+  imageInvert?: boolean;
+  imageAnimate?: boolean;
+  // New granular controls
+  cellSize?: number;           // Character size in pixels (4-32)
+  characterSet?: CharacterSet; // Which character set to use
+  customChars?: string;        // Custom character string
+  fontFamily?: FontFamily;     // Font to use
+  charSpacingX?: number;       // Horizontal spacing multiplier
+  charSpacingY?: number;       // Vertical spacing multiplier
+  contrast?: number;           // Contrast adjustment (0.5-2)
+  brightness?: number;         // Brightness adjustment (-0.5 to 0.5)
+  bgOpacity?: number;          // Background opacity (0-1)
+  renderMode?: RenderMode;     // How to render the ASCII
+  glowEffect?: boolean;        // Add glow to characters
+  glowIntensity?: number;      // Glow intensity (0-2)
+  scanlines?: boolean;         // Add scanline effect
+  chromatic?: boolean;         // Chromatic aberration effect
 }
 
 export interface AsciiCanvasHandle {
   getCanvas: () => HTMLCanvasElement | null;
 }
 
-const ASCII_CHARS = ".,-~:;=!*#$@";
+// Character sets for different styles
+const CHARACTER_SETS: Record<CharacterSet, string> = {
+  standard: ".,-~:;=!*#$@",
+  detailed: " .'`^\",:;Il!i><~+_-?][}{1)(|\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$",
+  blocks: " ░▒▓█",
+  binary: "01",
+  minimal: " .-+*#",
+  braille: "⠀⠁⠂⠃⠄⠅⠆⠇⡀⡁⡂⡃⡄⡅⡆⡇⠈⠉⠊⠋⠌⠍⠎⠏⡈⡉⡊⡋⡌⡍⡎⡏⠐⠑⠒⠓⠔⠕⠖⠗⡐⡑⡒⡓⡔⡕⡖⡗⠘⠙⠚⠛⠜⠝⠞⠟⡘⡙⡚⡛⡜⡝⡞⡟",
+  japanese: "ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍ",
+  arrows: "→↗↑↖←↙↓↘●○◐◑◒◓",
+  custom: "",
+};
+
 const MATRIX_CHARS = "ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍ0123456789";
+
+const FONT_MAP: Record<FontFamily, string> = {
+  monospace: "monospace",
+  courier: "'Courier New', Courier, monospace",
+  consolas: "Consolas, monospace",
+  firacode: "'Fira Code', monospace",
+  jetbrains: "'JetBrains Mono', monospace",
+};
 
 export const AsciiCanvas = forwardRef<AsciiCanvasHandle, AsciiCanvasProps>(({
   pattern = "donut",
@@ -56,6 +94,21 @@ export const AsciiCanvas = forwardRef<AsciiCanvasHandle, AsciiCanvasProps>(({
   imageData,
   imageInvert = false,
   imageAnimate = true,
+  // New props with defaults
+  cellSize = 14,
+  characterSet = "standard",
+  customChars = "",
+  fontFamily = "monospace",
+  charSpacingX = 0.6,
+  charSpacingY = 1.0,
+  contrast = 1,
+  brightness = 0,
+  bgOpacity = 0.9,
+  renderMode = "normal",
+  glowEffect = false,
+  glowIntensity = 1,
+  scanlines = false,
+  chromatic = false,
 }, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -69,6 +122,9 @@ export const AsciiCanvas = forwardRef<AsciiCanvasHandle, AsciiCanvasProps>(({
   const imageRef = useRef<HTMLImageElement | null>(null);
   const imageCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const imageBrightnessRef = useRef<number[][] | null>(null);
+  const fireBufferRef = useRef<number[][]>([]);
+  const starsRef = useRef<Array<{x: number, y: number, z: number, speed: number}>>([]);
+  const rainDropsRef = useRef<Array<{x: number, y: number, speed: number, length: number, char: string}>>([]);
 
   const propsRef = useRef({
     pattern, speed, density, colorMode, textColor,
@@ -76,6 +132,9 @@ export const AsciiCanvas = forwardRef<AsciiCanvasHandle, AsciiCanvasProps>(({
     rotationX, rotationY, rotationZ,
     autoRotate, autoRotateSpeedX, autoRotateSpeedY, autoRotateSpeedZ,
     imageInvert, imageAnimate,
+    cellSize, characterSet, customChars, fontFamily, charSpacingX, charSpacingY,
+    contrast, brightness, bgOpacity, renderMode, glowEffect, glowIntensity,
+    scanlines, chromatic,
   });
 
   useEffect(() => {
@@ -85,8 +144,11 @@ export const AsciiCanvas = forwardRef<AsciiCanvasHandle, AsciiCanvasProps>(({
       rotationX, rotationY, rotationZ,
       autoRotate, autoRotateSpeedX, autoRotateSpeedY, autoRotateSpeedZ,
       imageInvert, imageAnimate,
+      cellSize, characterSet, customChars, fontFamily, charSpacingX, charSpacingY,
+      contrast, brightness, bgOpacity, renderMode, glowEffect, glowIntensity,
+      scanlines, chromatic,
     };
-  }, [pattern, speed, density, colorMode, textColor, hueStart, hueEnd, saturation, lightness, rotationX, rotationY, rotationZ, autoRotate, autoRotateSpeedX, autoRotateSpeedY, autoRotateSpeedZ, imageInvert, imageAnimate]);
+  }, [pattern, speed, density, colorMode, textColor, hueStart, hueEnd, saturation, lightness, rotationX, rotationY, rotationZ, autoRotate, autoRotateSpeedX, autoRotateSpeedY, autoRotateSpeedZ, imageInvert, imageAnimate, cellSize, characterSet, customChars, fontFamily, charSpacingX, charSpacingY, contrast, brightness, bgOpacity, renderMode, glowEffect, glowIntensity, scanlines, chromatic]);
 
   // Load image when imageData changes
   useEffect(() => {
@@ -101,7 +163,7 @@ export const AsciiCanvas = forwardRef<AsciiCanvasHandle, AsciiCanvasProps>(({
       imageRef.current = img;
       // Pre-process image brightness
       const tempCanvas = document.createElement('canvas');
-      const maxSize = 200; // Limit processing size
+      const maxSize = 300; // Higher resolution for more detail
       const scale = Math.min(maxSize / img.width, maxSize / img.height, 1);
       tempCanvas.width = Math.floor(img.width * scale);
       tempCanvas.height = Math.floor(img.height * scale);
@@ -128,17 +190,63 @@ export const AsciiCanvas = forwardRef<AsciiCanvasHandle, AsciiCanvasProps>(({
     img.src = imageData;
   }, [imageData]);
 
-  const getColor = useCallback((value: number, props: typeof propsRef.current): string => {
+  // Get the active character set
+  const getChars = useCallback((props: typeof propsRef.current): string => {
+    if (props.characterSet === "custom" && props.customChars) {
+      return props.customChars;
+    }
+    return CHARACTER_SETS[props.characterSet] || CHARACTER_SETS.standard;
+  }, []);
+
+  // Apply contrast and brightness to a value
+  const applyAdjustments = useCallback((value: number, props: typeof propsRef.current): number => {
+    // Apply contrast (centered around 0.5)
+    let v = (value - 0.5) * props.contrast + 0.5;
+    // Apply brightness
+    v = v + props.brightness;
+    // Clamp
+    return Math.max(0, Math.min(1, v));
+  }, []);
+
+  const getColor = useCallback((value: number, props: typeof propsRef.current, x?: number, y?: number): string => {
+    const v = applyAdjustments(value, props);
+
     if (props.colorMode === "green") {
-      const brightness = Math.floor(value * 255);
+      const brightness = Math.floor(v * 255);
       return `rgb(0, ${brightness}, 0)`;
     } else if (props.colorMode === "rainbow") {
       const hueRange = props.hueEnd - props.hueStart;
-      const hue = props.hueStart + value * hueRange;
+      const hue = props.hueStart + v * hueRange;
       return `hsl(${hue}, ${props.saturation}%, ${props.lightness}%)`;
+    } else if (props.colorMode === "grayscale") {
+      const brightness = Math.floor(v * 255);
+      return `rgb(${brightness}, ${brightness}, ${brightness})`;
+    } else if (props.colorMode === "neon") {
+      // Neon color cycling through cyan, magenta, yellow
+      const hue = ((x || 0) * 2 + (y || 0) * 2) % 360;
+      return `hsl(${hue}, 100%, ${50 + v * 30}%)`;
     } else {
       return props.textColor;
     }
+  }, [applyAdjustments]);
+
+  // Sobel edge detection for images
+  const detectEdges = useCallback((brightness: number[][], x: number, y: number): number => {
+    if (y <= 0 || y >= brightness.length - 1 || x <= 0 || x >= brightness[0].length - 1) {
+      return 0;
+    }
+
+    // Sobel kernels
+    const gx =
+      -brightness[y-1][x-1] + brightness[y-1][x+1] +
+      -2*brightness[y][x-1] + 2*brightness[y][x+1] +
+      -brightness[y+1][x-1] + brightness[y+1][x+1];
+
+    const gy =
+      -brightness[y-1][x-1] - 2*brightness[y-1][x] - brightness[y-1][x+1] +
+      brightness[y+1][x-1] + 2*brightness[y+1][x] + brightness[y+1][x+1];
+
+    return Math.sqrt(gx * gx + gy * gy);
   }, []);
 
   const render = useCallback((time: number) => {
@@ -154,15 +262,22 @@ export const AsciiCanvas = forwardRef<AsciiCanvasHandle, AsciiCanvasProps>(({
     const width = canvas.width;
     const height = canvas.height;
 
-    // Clear
-    ctx.fillStyle = "rgba(0, 0, 0, 0.9)";
+    // Get character set
+    const chars = getChars(props);
+
+    // Calculate font size based on cellSize and density
+    const fontSize = Math.max(4, Math.floor(props.cellSize * props.density));
+    const fontName = FONT_MAP[props.fontFamily];
+    ctx.font = `${fontSize}px ${fontName}`;
+
+    const charWidth = fontSize * props.charSpacingX;
+    const charHeight = fontSize * props.charSpacingY;
+    const cols = Math.floor(width / charWidth);
+    const rows = Math.floor(height / charHeight);
+
+    // Clear with variable opacity
+    ctx.fillStyle = `rgba(0, 0, 0, ${props.bgOpacity})`;
     ctx.fillRect(0, 0, width, height);
-
-    const fontSize = Math.max(8, Math.floor(14 * props.density));
-    ctx.font = `${fontSize}px monospace`;
-
-    const cols = Math.floor(width / (fontSize * 0.6));
-    const rows = Math.floor(height / fontSize);
 
     // Calculate rotation
     let A = (props.rotationX * Math.PI) / 180;
@@ -179,6 +294,40 @@ export const AsciiCanvas = forwardRef<AsciiCanvasHandle, AsciiCanvasProps>(({
     const cosB = Math.cos(B), sinB = Math.sin(B);
     const cosC = Math.cos(C), sinC = Math.sin(C);
 
+    // Helper to draw character with effects
+    const drawChar = (char: string, x: number, y: number, colorValue: number, col: number, row: number) => {
+      const color = getColor(colorValue, props, col, row);
+
+      if (props.glowEffect) {
+        ctx.shadowColor = color;
+        ctx.shadowBlur = props.glowIntensity * 5;
+      } else {
+        ctx.shadowBlur = 0;
+      }
+
+      if (props.chromatic) {
+        // Draw with color separation
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = `rgba(255, 0, 0, ${colorValue * 0.5})`;
+        ctx.fillText(char, x - 1, y);
+        ctx.fillStyle = `rgba(0, 255, 0, ${colorValue * 0.5})`;
+        ctx.fillText(char, x, y);
+        ctx.fillStyle = `rgba(0, 0, 255, ${colorValue * 0.5})`;
+        ctx.fillText(char, x + 1, y);
+        ctx.globalCompositeOperation = 'source-over';
+      } else {
+        ctx.fillStyle = color;
+        ctx.fillText(char, x, y);
+      }
+    };
+
+    // Helper to get char index from value
+    const getCharFromValue = (v: number): string => {
+      const adjusted = applyAdjustments(v, props);
+      const charIndex = Math.floor(adjusted * (chars.length - 1));
+      return chars[Math.max(0, Math.min(charIndex, chars.length - 1))];
+    };
+
     switch (props.pattern) {
       case "donut": {
         const output: string[][] = Array(rows).fill(null).map(() => Array(cols).fill(" "));
@@ -189,8 +338,11 @@ export const AsciiCanvas = forwardRef<AsciiCanvasHandle, AsciiCanvasProps>(({
         const K1 = cols * 0.3;
         const K2 = 5;
 
-        for (let theta = 0; theta < 6.28; theta += 0.07) {
-          for (let phi = 0; phi < 6.28; phi += 0.02) {
+        const thetaStep = 0.07 / props.density;
+        const phiStep = 0.02 / props.density;
+
+        for (let theta = 0; theta < 6.28; theta += thetaStep) {
+          for (let phi = 0; phi < 6.28; phi += phiStep) {
             const cosTheta = Math.cos(theta), sinTheta = Math.sin(theta);
             const cosPhi = Math.cos(phi), sinPhi = Math.sin(phi);
 
@@ -210,8 +362,7 @@ export const AsciiCanvas = forwardRef<AsciiCanvasHandle, AsciiCanvasProps>(({
             if (L > 0 && xp >= 0 && xp < cols && yp >= 0 && yp < rows) {
               if (ooz > zbuffer[yp][xp]) {
                 zbuffer[yp][xp] = ooz;
-                const luminanceIndex = Math.floor(L * 8);
-                output[yp][xp] = ASCII_CHARS[Math.max(0, Math.min(luminanceIndex, ASCII_CHARS.length - 1))];
+                output[yp][xp] = getCharFromValue(L);
                 colorBuffer[yp][xp] = L;
               }
             }
@@ -221,8 +372,7 @@ export const AsciiCanvas = forwardRef<AsciiCanvasHandle, AsciiCanvasProps>(({
         for (let y = 0; y < rows; y++) {
           for (let x = 0; x < cols; x++) {
             if (output[y][x] !== " ") {
-              ctx.fillStyle = getColor(colorBuffer[y][x], props);
-              ctx.fillText(output[y][x], x * fontSize * 0.6, y * fontSize);
+              drawChar(output[y][x], x * charWidth, y * charHeight, colorBuffer[y][x], x, y);
             }
           }
         }
@@ -238,28 +388,30 @@ export const AsciiCanvas = forwardRef<AsciiCanvasHandle, AsciiCanvasProps>(({
         ctx.fillStyle = "rgba(0, 0, 0, 0.05)";
         ctx.fillRect(0, 0, width, height);
 
+        const matrixChars = props.characterSet === "japanese" ? MATRIX_CHARS :
+                           (props.characterSet === "binary" ? "01" : chars);
+
         for (let i = 0; i < cols; i++) {
-          const char = MATRIX_CHARS[Math.floor(Math.random() * MATRIX_CHARS.length)];
-          const x = i * fontSize * 0.6;
-          const y = matrixDropsRef.current[i] * fontSize;
+          const char = matrixChars[Math.floor(Math.random() * matrixChars.length)];
+          const x = i * charWidth;
+          const y = matrixDropsRef.current[i] * charHeight;
 
           // Head of the drop (bright)
-          ctx.fillStyle = getColor(1, props);
-          ctx.fillText(char, x, y);
+          drawChar(char, x, y, 1, i, Math.floor(y / charHeight));
 
           // Trail
-          for (let t = 1; t < 20; t++) {
-            const trailY = y - t * fontSize;
+          const trailLength = Math.floor(20 * props.density);
+          for (let t = 1; t < trailLength; t++) {
+            const trailY = y - t * charHeight;
             if (trailY > 0) {
-              const fade = 1 - t / 20;
-              ctx.fillStyle = getColor(fade * 0.7, props);
-              const trailChar = MATRIX_CHARS[Math.floor(Math.random() * MATRIX_CHARS.length)];
-              ctx.fillText(trailChar, x, trailY);
+              const fade = 1 - t / trailLength;
+              const trailChar = matrixChars[Math.floor(Math.random() * matrixChars.length)];
+              drawChar(trailChar, x, trailY, fade * 0.7, i, Math.floor(trailY / charHeight));
             }
           }
 
           // Reset drop
-          if (matrixDropsRef.current[i] * fontSize > height && Math.random() > 0.975) {
+          if (matrixDropsRef.current[i] * charHeight > height && Math.random() > 0.975) {
             matrixDropsRef.current[i] = 0;
           }
           matrixDropsRef.current[i] += 0.5 * props.speed;
@@ -275,8 +427,8 @@ export const AsciiCanvas = forwardRef<AsciiCanvasHandle, AsciiCanvasProps>(({
         const size = 1.5;
         const K1 = cols * 0.25;
         const K2 = 5;
+        const step = 0.1 / props.density;
 
-        // Draw cube faces
         const faces = [
           { normal: [0, 0, 1], offset: size },
           { normal: [0, 0, -1], offset: size },
@@ -287,8 +439,8 @@ export const AsciiCanvas = forwardRef<AsciiCanvasHandle, AsciiCanvasProps>(({
         ];
 
         for (const face of faces) {
-          for (let u = -size; u <= size; u += 0.1) {
-            for (let v = -size; v <= size; v += 0.1) {
+          for (let u = -size; u <= size; u += step) {
+            for (let v = -size; v <= size; v += step) {
               let x, y, z;
               if (face.normal[2] !== 0) {
                 x = u; y = v; z = face.normal[2] * face.offset;
@@ -317,16 +469,13 @@ export const AsciiCanvas = forwardRef<AsciiCanvasHandle, AsciiCanvasProps>(({
               const xp = Math.floor(cols / 2 + K1 * ooz * x3);
               const yp = Math.floor(rows / 2 - K1 * ooz * y3 * 0.5);
 
-              // Calculate lighting
               const nx = face.normal[0] * cosB * cosC - face.normal[1] * sinC + face.normal[2] * sinB * cosC;
-              const ny = face.normal[0] * cosB * sinC + face.normal[1] * cosC + face.normal[2] * sinB * sinC;
               const nz = -face.normal[0] * sinB + face.normal[2] * cosB;
               const L = Math.max(0, -nz * 0.5 + 0.5);
 
               if (xp >= 0 && xp < cols && yp >= 0 && yp < rows && z3 > zbuffer[yp][xp]) {
                 zbuffer[yp][xp] = z3;
-                const charIndex = Math.floor(L * (ASCII_CHARS.length - 1));
-                output[yp][xp] = ASCII_CHARS[charIndex];
+                output[yp][xp] = getCharFromValue(L);
                 colorBuffer[yp][xp] = L;
               }
             }
@@ -336,8 +485,7 @@ export const AsciiCanvas = forwardRef<AsciiCanvasHandle, AsciiCanvasProps>(({
         for (let y = 0; y < rows; y++) {
           for (let x = 0; x < cols; x++) {
             if (output[y][x] !== " ") {
-              ctx.fillStyle = getColor(colorBuffer[y][x], props);
-              ctx.fillText(output[y][x], x * fontSize * 0.6, y * fontSize);
+              drawChar(output[y][x], x * charWidth, y * charHeight, colorBuffer[y][x], x, y);
             }
           }
         }
@@ -352,14 +500,14 @@ export const AsciiCanvas = forwardRef<AsciiCanvasHandle, AsciiCanvasProps>(({
         const R = 2;
         const K1 = cols * 0.3;
         const K2 = 5;
+        const step = 0.05 / props.density;
 
-        for (let theta = 0; theta < Math.PI; theta += 0.05) {
-          for (let phi = 0; phi < 2 * Math.PI; phi += 0.05) {
+        for (let theta = 0; theta < Math.PI; theta += step) {
+          for (let phi = 0; phi < 2 * Math.PI; phi += step) {
             const x = R * Math.sin(theta) * Math.cos(phi);
             const y = R * Math.sin(theta) * Math.sin(phi);
             const z = R * Math.cos(theta);
 
-            // Rotate
             const x1 = x * cosC - y * sinC;
             const y1 = x * sinC + y * cosC;
             const x2 = x1 * cosB + z * sinB;
@@ -373,7 +521,6 @@ export const AsciiCanvas = forwardRef<AsciiCanvasHandle, AsciiCanvasProps>(({
             const xp = Math.floor(cols / 2 + K1 * ooz * x2);
             const yp = Math.floor(rows / 2 - K1 * ooz * y2 * 0.5);
 
-            // Normal for lighting
             const nx = Math.sin(theta) * Math.cos(phi);
             const ny = Math.sin(theta) * Math.sin(phi);
             const nz = Math.cos(theta);
@@ -381,8 +528,7 @@ export const AsciiCanvas = forwardRef<AsciiCanvasHandle, AsciiCanvasProps>(({
 
             if (xp >= 0 && xp < cols && yp >= 0 && yp < rows && z3 > zbuffer[yp][xp]) {
               zbuffer[yp][xp] = z3;
-              const charIndex = Math.floor(L * (ASCII_CHARS.length - 1));
-              output[yp][xp] = ASCII_CHARS[charIndex];
+              output[yp][xp] = getCharFromValue(L);
               colorBuffer[yp][xp] = L;
             }
           }
@@ -391,8 +537,7 @@ export const AsciiCanvas = forwardRef<AsciiCanvasHandle, AsciiCanvasProps>(({
         for (let y = 0; y < rows; y++) {
           for (let x = 0; x < cols; x++) {
             if (output[y][x] !== " ") {
-              ctx.fillStyle = getColor(colorBuffer[y][x], props);
-              ctx.fillText(output[y][x], x * fontSize * 0.6, y * fontSize);
+              drawChar(output[y][x], x * charWidth, y * charHeight, colorBuffer[y][x], x, y);
             }
           }
         }
@@ -411,9 +556,7 @@ export const AsciiCanvas = forwardRef<AsciiCanvasHandle, AsciiCanvasProps>(({
             v += Math.sin(Math.sqrt(px * px + py * py) * 10 - elapsed);
             v = (v + 4) / 8;
 
-            const charIndex = Math.floor(v * (ASCII_CHARS.length - 1));
-            ctx.fillStyle = getColor(v, props);
-            ctx.fillText(ASCII_CHARS[charIndex], x * fontSize * 0.6, y * fontSize);
+            drawChar(getCharFromValue(v), x * charWidth, y * charHeight, v, x, y);
           }
         }
         break;
@@ -435,9 +578,7 @@ export const AsciiCanvas = forwardRef<AsciiCanvasHandle, AsciiCanvasProps>(({
             const depth = 50 / dist + elapsed * 3;
             const v = (Math.sin(depth) * Math.cos(angle * 8 + elapsed) + 1) / 2;
 
-            const charIndex = Math.floor(v * (ASCII_CHARS.length - 1));
-            ctx.fillStyle = getColor(v, props);
-            ctx.fillText(ASCII_CHARS[charIndex], x * fontSize * 0.6, y * fontSize);
+            drawChar(getCharFromValue(v), x * charWidth, y * charHeight, v, x, y);
           }
         }
         break;
@@ -456,9 +597,7 @@ export const AsciiCanvas = forwardRef<AsciiCanvasHandle, AsciiCanvasProps>(({
             let v = (wave1 + wave2 + wave3 + 1) / 2;
             v = Math.max(0, Math.min(1, v));
 
-            const charIndex = Math.floor(v * (ASCII_CHARS.length - 1));
-            ctx.fillStyle = getColor(v, props);
-            ctx.fillText(ASCII_CHARS[charIndex], x * fontSize * 0.6, y * fontSize);
+            drawChar(getCharFromValue(v), x * charWidth, y * charHeight, v, x, y);
           }
         }
         break;
@@ -478,9 +617,122 @@ export const AsciiCanvas = forwardRef<AsciiCanvasHandle, AsciiCanvasProps>(({
             const spiral = Math.sin(dist * 0.3 - angle * 3 + elapsed * 2);
             const v = (spiral + 1) / 2;
 
-            const charIndex = Math.floor(v * (ASCII_CHARS.length - 1));
-            ctx.fillStyle = getColor(v, props);
-            ctx.fillText(ASCII_CHARS[charIndex], x * fontSize * 0.6, y * fontSize);
+            drawChar(getCharFromValue(v), x * charWidth, y * charHeight, v, x, y);
+          }
+        }
+        break;
+      }
+
+      case "fire": {
+        // Initialize fire buffer if needed
+        if (fireBufferRef.current.length !== rows || (fireBufferRef.current[0] && fireBufferRef.current[0].length !== cols)) {
+          fireBufferRef.current = Array(rows).fill(null).map(() => Array(cols).fill(0));
+        }
+
+        const buffer = fireBufferRef.current;
+
+        // Set bottom row on fire
+        for (let x = 0; x < cols; x++) {
+          buffer[rows - 1][x] = Math.random() > 0.3 ? 1 : 0;
+        }
+
+        // Propagate fire upward
+        for (let y = 0; y < rows - 1; y++) {
+          for (let x = 0; x < cols; x++) {
+            const decay = Math.random() * 0.15;
+            const spread = Math.floor(Math.random() * 3) - 1;
+            const srcX = Math.max(0, Math.min(cols - 1, x + spread));
+            buffer[y][x] = Math.max(0, buffer[y + 1][srcX] - decay);
+          }
+        }
+
+        // Render
+        for (let y = 0; y < rows; y++) {
+          for (let x = 0; x < cols; x++) {
+            const v = buffer[y][x];
+            if (v > 0.1) {
+              // Fire colors
+              const hue = 30 - v * 30; // Orange to red
+              ctx.fillStyle = `hsl(${hue}, 100%, ${v * 50 + 10}%)`;
+              ctx.fillText(getCharFromValue(v), x * charWidth, y * charHeight);
+            }
+          }
+        }
+        break;
+      }
+
+      case "rain": {
+        // Initialize raindrops if needed
+        if (rainDropsRef.current.length === 0) {
+          for (let i = 0; i < cols / 2; i++) {
+            rainDropsRef.current.push({
+              x: Math.random() * cols,
+              y: Math.random() * rows,
+              speed: 0.5 + Math.random() * 1.5,
+              length: 3 + Math.floor(Math.random() * 8),
+              char: chars[Math.floor(Math.random() * chars.length)],
+            });
+          }
+        }
+
+        // Render rain
+        for (const drop of rainDropsRef.current) {
+          // Draw drop
+          for (let i = 0; i < drop.length; i++) {
+            const y = drop.y - i;
+            if (y >= 0 && y < rows) {
+              const fade = 1 - i / drop.length;
+              drawChar(drop.char, Math.floor(drop.x) * charWidth, Math.floor(y) * charHeight, fade, Math.floor(drop.x), Math.floor(y));
+            }
+          }
+
+          // Update position
+          drop.y += drop.speed * props.speed;
+          if (drop.y > rows + drop.length) {
+            drop.y = -drop.length;
+            drop.x = Math.random() * cols;
+          }
+        }
+        break;
+      }
+
+      case "starfield": {
+        // Initialize stars if needed
+        if (starsRef.current.length === 0) {
+          for (let i = 0; i < 200; i++) {
+            starsRef.current.push({
+              x: Math.random() * 2 - 1,
+              y: Math.random() * 2 - 1,
+              z: Math.random(),
+              speed: 0.002 + Math.random() * 0.008,
+            });
+          }
+        }
+
+        ctx.fillStyle = "black";
+        ctx.fillRect(0, 0, width, height);
+
+        const cx = cols / 2;
+        const cy = rows / 2;
+
+        for (const star of starsRef.current) {
+          // Project star
+          const scale = 1 / star.z;
+          const screenX = Math.floor(cx + star.x * scale * cx);
+          const screenY = Math.floor(cy + star.y * scale * cy);
+
+          if (screenX >= 0 && screenX < cols && screenY >= 0 && screenY < rows) {
+            const v = 1 - star.z;
+            const char = v > 0.8 ? '@' : v > 0.6 ? '*' : v > 0.4 ? '+' : '.';
+            drawChar(char, screenX * charWidth, screenY * charHeight, v, screenX, screenY);
+          }
+
+          // Move star
+          star.z -= star.speed * props.speed;
+          if (star.z <= 0) {
+            star.z = 1;
+            star.x = Math.random() * 2 - 1;
+            star.y = Math.random() * 2 - 1;
           }
         }
         break;
@@ -489,12 +741,11 @@ export const AsciiCanvas = forwardRef<AsciiCanvasHandle, AsciiCanvasProps>(({
       case "image": {
         const brightness = imageBrightnessRef.current;
         if (!brightness || brightness.length === 0) {
-          // Show placeholder text if no image loaded
           ctx.fillStyle = getColor(0.5, props);
-          ctx.font = `${fontSize * 2}px monospace`;
+          ctx.font = `${fontSize * 2}px ${fontName}`;
           ctx.textAlign = "center";
           ctx.fillText("Upload an image", width / 2, height / 2);
-          ctx.font = `${fontSize}px monospace`;
+          ctx.font = `${fontSize}px ${fontName}`;
           ctx.textAlign = "left";
           break;
         }
@@ -502,9 +753,8 @@ export const AsciiCanvas = forwardRef<AsciiCanvasHandle, AsciiCanvasProps>(({
         const imgRows = brightness.length;
         const imgCols = brightness[0].length;
 
-        // Calculate aspect-ratio-preserving mapping
         const imgAspect = imgCols / imgRows;
-        const canvasAspect = cols / (rows * 2); // Account for character aspect ratio
+        const canvasAspect = cols / (rows * 2);
 
         let mappedCols = cols;
         let mappedRows = rows;
@@ -512,50 +762,63 @@ export const AsciiCanvas = forwardRef<AsciiCanvasHandle, AsciiCanvasProps>(({
         let offsetY = 0;
 
         if (imgAspect > canvasAspect) {
-          // Image is wider - fit to width
           mappedRows = Math.floor(cols / imgAspect / 2);
           offsetY = Math.floor((rows - mappedRows) / 2);
         } else {
-          // Image is taller - fit to height
           mappedCols = Math.floor(rows * 2 * imgAspect);
           offsetX = Math.floor((cols - mappedCols) / 2);
         }
 
         for (let y = 0; y < rows; y++) {
           for (let x = 0; x < cols; x++) {
-            // Map canvas position to image position
             const imgX = Math.floor(((x - offsetX) / mappedCols) * imgCols);
             const imgY = Math.floor(((y - offsetY) / mappedRows) * imgRows);
 
-            // Check if within image bounds
             if (imgX < 0 || imgX >= imgCols || imgY < 0 || imgY >= imgRows) {
-              continue; // Skip pixels outside the image
+              continue;
             }
 
             let v = brightness[imgY][imgX];
 
-            // Apply invert if enabled
+            // Apply render mode
+            if (props.renderMode === "edges") {
+              v = detectEdges(brightness, imgX, imgY);
+              v = Math.min(1, v * 2); // Amplify edges
+            } else if (props.renderMode === "dither") {
+              // Simple ordered dithering
+              const threshold = ((x % 4) * 4 + (y % 4)) / 16;
+              v = v > threshold ? 1 : 0;
+            } else if (props.renderMode === "contrast") {
+              // High contrast mode
+              v = v > 0.5 ? 1 : 0;
+            }
+
             if (props.imageInvert) {
               v = 1 - v;
             }
 
-            // Apply animation if enabled
             if (props.imageAnimate) {
               const wave = Math.sin((x / cols) * 4 + (y / rows) * 4 + elapsed * 2) * 0.15;
               v = Math.max(0, Math.min(1, v + wave));
             }
 
-            const charIndex = Math.floor(v * (ASCII_CHARS.length - 1));
-            ctx.fillStyle = getColor(v, props);
-            ctx.fillText(ASCII_CHARS[charIndex], x * fontSize * 0.6, y * fontSize);
+            drawChar(getCharFromValue(v), x * charWidth, y * charHeight, v, x, y);
           }
         }
         break;
       }
     }
 
+    // Apply scanlines effect
+    if (props.scanlines) {
+      ctx.fillStyle = "rgba(0, 0, 0, 0.1)";
+      for (let y = 0; y < height; y += 4) {
+        ctx.fillRect(0, y, width, 2);
+      }
+    }
+
     animationRef.current = requestAnimationFrame(render);
-  }, [getColor]);
+  }, [getColor, getChars, applyAdjustments, detectEdges]);
 
   // Handle resize
   useEffect(() => {
@@ -568,7 +831,9 @@ export const AsciiCanvas = forwardRef<AsciiCanvasHandle, AsciiCanvasProps>(({
         const dpr = Math.min(window.devicePixelRatio, 2);
         canvas.width = width * dpr;
         canvas.height = height * dpr;
-        matrixDropsRef.current = []; // Reset matrix drops on resize
+        matrixDropsRef.current = [];
+        rainDropsRef.current = [];
+        fireBufferRef.current = [];
       }
     });
 

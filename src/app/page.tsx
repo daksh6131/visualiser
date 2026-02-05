@@ -17,7 +17,6 @@ import { Slider } from "@/components/ui/slider";
 import { ShaderCanvas, ShaderCanvasHandle } from "@/components/ShaderCanvas";
 import { TunnelCanvas, TunnelCanvasHandle } from "@/components/TunnelCanvas";
 import { WaveCanvas, WaveCanvasHandle } from "@/components/WaveCanvas";
-import { GeometricCanvas, GeometricCanvasHandle } from "@/components/GeometricCanvas";
 import { AsciiCanvas, AsciiCanvasHandle } from "@/components/AsciiCanvas";
 import { DownloadButton } from "@/components/DownloadButton";
 
@@ -65,14 +64,6 @@ interface DesignState {
   tr?: number; // tunnelRotation
   eg?: number; // enableGlow (0/1)
   gi?: number; // glowIntensity
-  // Geometric
-  gs?: string; // geoShape
-  sc?: number; // shapeCount
-  mp?: string; // motionPattern
-  ms?: number; // motionSpeed
-  pc?: string; // primaryColor
-  acc?: string; // accentColor
-  bg?: string; // bgColor
   // Shader
   sp?: string; // shaderPattern
   ss?: number; // shaderSpeed
@@ -150,6 +141,9 @@ const asciiPatterns = [
   { value: "tunnel", label: "Tunnel" },
   { value: "wave", label: "Wave" },
   { value: "spiral", label: "Spiral" },
+  { value: "fire", label: "Fire" },
+  { value: "rain", label: "Rain" },
+  { value: "starfield", label: "Starfield" },
   { value: "image", label: "Image" },
 ];
 
@@ -157,6 +151,35 @@ const asciiColorModes = [
   { value: "green", label: "Matrix Green" },
   { value: "single", label: "Custom" },
   { value: "rainbow", label: "Rainbow" },
+  { value: "grayscale", label: "Grayscale" },
+  { value: "neon", label: "Neon" },
+];
+
+const asciiCharacterSets = [
+  { value: "standard", label: "Standard" },
+  { value: "detailed", label: "Detailed" },
+  { value: "blocks", label: "Blocks" },
+  { value: "binary", label: "Binary" },
+  { value: "minimal", label: "Minimal" },
+  { value: "braille", label: "Braille" },
+  { value: "japanese", label: "Japanese" },
+  { value: "arrows", label: "Arrows" },
+  { value: "custom", label: "Custom" },
+];
+
+const asciiFontFamilies = [
+  { value: "monospace", label: "Monospace" },
+  { value: "courier", label: "Courier" },
+  { value: "consolas", label: "Consolas" },
+  { value: "firacode", label: "Fira Code" },
+  { value: "jetbrains", label: "JetBrains" },
+];
+
+const asciiRenderModes = [
+  { value: "normal", label: "Normal" },
+  { value: "edges", label: "Edge Detect" },
+  { value: "dither", label: "Dither" },
+  { value: "contrast", label: "High Contrast" },
 ];
 
 const wavePatterns = [
@@ -195,26 +218,7 @@ const shaderPatterns = [
   { value: "waves", label: "Waves" },
 ];
 
-const geometricShapes = [
-  { value: "hexagon", label: "Hexagon" },
-  { value: "triangle", label: "Triangle" },
-  { value: "square", label: "Square" },
-  { value: "circle", label: "Circle" },
-  { value: "star", label: "Star" },
-  { value: "pentagon", label: "Pentagon" },
-  { value: "octagon", label: "Octagon" },
-];
-
-const motionPatterns = [
-  { value: "float", label: "Float" },
-  { value: "orbital", label: "Orbital" },
-  { value: "bounce", label: "Bounce" },
-  { value: "wave", label: "Wave" },
-  { value: "spiral", label: "Spiral" },
-  { value: "pulse", label: "Pulse" },
-];
-
-type AnimationType = "geometric" | "wavefield" | "ascii" | "tunnel" | "shader";
+type AnimationType = "wavefield" | "ascii" | "tunnel" | "shader";
 
 export default function Home() {
   const [type, setType] = useState<AnimationType>("shader");
@@ -224,7 +228,6 @@ export default function Home() {
   const shaderCanvasRef = useRef<ShaderCanvasHandle>(null);
   const tunnelCanvasRef = useRef<TunnelCanvasHandle>(null);
   const waveCanvasRef = useRef<WaveCanvasHandle>(null);
-  const geometricCanvasRef = useRef<GeometricCanvasHandle>(null);
   const asciiCanvasRef = useRef<AsciiCanvasHandle>(null);
 
   // Get the currently active canvas element
@@ -236,8 +239,6 @@ export default function Home() {
         return tunnelCanvasRef.current?.getCanvas() ?? null;
       case "wavefield":
         return waveCanvasRef.current?.getCanvas() ?? null;
-      case "geometric":
-        return geometricCanvasRef.current?.getCanvas() ?? null;
       case "ascii":
         return asciiCanvasRef.current?.getCanvas() ?? null;
       default:
@@ -284,6 +285,21 @@ export default function Home() {
   const [asciiImageInvert, setAsciiImageInvert] = useState(false);
   const [asciiImageAnimate, setAsciiImageAnimate] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // New granular ASCII controls
+  const [asciiCellSize, setAsciiCellSize] = useState(14);
+  const [asciiCharacterSet, setAsciiCharacterSet] = useState("standard");
+  const [asciiCustomChars, setAsciiCustomChars] = useState("");
+  const [asciiFontFamily, setAsciiFontFamily] = useState("monospace");
+  const [asciiCharSpacingX, setAsciiCharSpacingX] = useState(0.6);
+  const [asciiCharSpacingY, setAsciiCharSpacingY] = useState(1.0);
+  const [asciiContrast, setAsciiContrast] = useState(1);
+  const [asciiBrightness, setAsciiBrightness] = useState(0);
+  const [asciiBgOpacity, setAsciiBgOpacity] = useState(0.9);
+  const [asciiRenderMode, setAsciiRenderMode] = useState("normal");
+  const [asciiGlowEffect, setAsciiGlowEffect] = useState(false);
+  const [asciiGlowIntensity, setAsciiGlowIntensity] = useState(1);
+  const [asciiScanlines, setAsciiScanlines] = useState(false);
+  const [asciiChromatic, setAsciiChromatic] = useState(false);
 
   // Handle image upload
   const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -330,15 +346,6 @@ export default function Home() {
   const [tunnelRotation, setTunnelRotation] = useState(0.2);
   const [enableGlow, setEnableGlow] = useState(true);
   const [glowIntensity, setGlowIntensity] = useState(1);
-
-  // Geometric
-  const [geoShape, setGeoShape] = useState("hexagon");
-  const [shapeCount, setShapeCount] = useState(3);
-  const [motionPattern, setMotionPattern] = useState("float");
-  const [motionSpeed, setMotionSpeed] = useState(1);
-  const [primaryColor, setPrimaryColor] = useState("#fbbf24");
-  const [accentColor, setAccentColor] = useState("#ec4899");
-  const [bgColor, setBgColor] = useState("#0a1628");
 
   // Shader
   const [shaderPattern, setShaderPattern] = useState("psychedelic");
@@ -412,14 +419,6 @@ export default function Home() {
         if (state.tr !== undefined) setTunnelRotation(state.tr);
         if (state.eg !== undefined) setEnableGlow(state.eg === 1);
         if (state.gi !== undefined) setGlowIntensity(state.gi);
-        // Geometric
-        if (state.gs) setGeoShape(state.gs);
-        if (state.sc !== undefined) setShapeCount(state.sc);
-        if (state.mp) setMotionPattern(state.mp);
-        if (state.ms !== undefined) setMotionSpeed(state.ms);
-        if (state.pc) setPrimaryColor(state.pc);
-        if (state.acc) setAccentColor(state.acc);
-        if (state.bg) setBgColor(state.bg);
         // Shader
         if (state.sp) setShaderPattern(state.sp);
         if (state.ss !== undefined) setShaderSpeed(state.ss);
@@ -479,14 +478,6 @@ export default function Home() {
       state.tr = tunnelRotation;
       state.eg = enableGlow ? 1 : 0;
       state.gi = glowIntensity;
-    } else if (type === 'geometric') {
-      state.gs = geoShape;
-      state.sc = shapeCount;
-      state.mp = motionPattern;
-      state.ms = motionSpeed;
-      state.pc = primaryColor;
-      state.acc = accentColor;
-      state.bg = bgColor;
     } else if (type === 'shader') {
       state.sp = shaderPattern;
       state.ss = shaderSpeed;
@@ -508,7 +499,6 @@ export default function Home() {
     rotationX, rotationY, rotationZ, autoRotate, autoRotateSpeedX, autoRotateSpeedY, autoRotateSpeedZ,
     wavePattern, lineCount, waveAmplitude, waveFrequency, waveSpeed, wavePerspective, waveColorMode, waveColor,
     tunnelShape, tunnelPatternType, zoomSpeed, zoomDirection, layerCount, tunnelRotation, enableGlow, glowIntensity,
-    geoShape, shapeCount, motionPattern, motionSpeed, primaryColor, accentColor, bgColor,
     shaderPattern, shaderSpeed, shaderComplexity, shaderColorA, shaderColorB, shaderColorC, shaderSymmetry, shaderZoom, shaderRotation
   ]);
 
@@ -530,10 +520,29 @@ export default function Home() {
     setSeed(Math.floor(Math.random() * 10000));
 
     if (type === "ascii") {
-      setAsciiPattern(asciiPatterns[Math.floor(Math.random() * asciiPatterns.length)].value);
+      // Don't randomize to "image" pattern
+      const nonImagePatterns = asciiPatterns.filter(p => p.value !== "image");
+      setAsciiPattern(nonImagePatterns[Math.floor(Math.random() * nonImagePatterns.length)].value);
       setAsciiSpeed(0.5 + Math.random() * 2);
-      setAsciiDensity(0.7 + Math.random() * 0.6);
+      setAsciiDensity(0.7 + Math.random() * 0.8);
       setAsciiColorMode(asciiColorModes[Math.floor(Math.random() * asciiColorModes.length)].value);
+      // Character set (exclude custom)
+      const nonCustomSets = asciiCharacterSets.filter(c => c.value !== "custom");
+      setAsciiCharacterSet(nonCustomSets[Math.floor(Math.random() * nonCustomSets.length)].value);
+      // Cell size and spacing
+      setAsciiCellSize(8 + Math.floor(Math.random() * 16));
+      setAsciiCharSpacingX(0.4 + Math.random() * 0.5);
+      setAsciiCharSpacingY(0.7 + Math.random() * 0.5);
+      // Contrast and brightness
+      setAsciiContrast(0.7 + Math.random() * 0.8);
+      setAsciiBrightness((Math.random() - 0.5) * 0.3);
+      setAsciiBgOpacity(0.7 + Math.random() * 0.3);
+      // Effects
+      setAsciiGlowEffect(Math.random() > 0.6);
+      setAsciiGlowIntensity(0.5 + Math.random() * 1.5);
+      setAsciiScanlines(Math.random() > 0.7);
+      setAsciiChromatic(Math.random() > 0.8);
+      // 3D rotation
       setRotationX(Math.random() * 90 - 45);
       setRotationY(Math.random() * 90 - 45);
       setRotationZ(Math.random() * 60 - 30);
@@ -552,11 +561,6 @@ export default function Home() {
       setZoomSpeed(0.5 + Math.random() * 2);
       setLayerCount(15 + Math.floor(Math.random() * 35));
       setTunnelRotation(Math.random() * 0.5);
-    } else if (type === "geometric") {
-      setGeoShape(geometricShapes[Math.floor(Math.random() * geometricShapes.length)].value);
-      setShapeCount(1 + Math.floor(Math.random() * 5));
-      setMotionPattern(motionPatterns[Math.floor(Math.random() * motionPatterns.length)].value);
-      setMotionSpeed(0.5 + Math.random() * 2);
     } else if (type === "shader") {
       setShaderPattern(shaderPatterns[Math.floor(Math.random() * shaderPatterns.length)].value);
       setShaderSpeed(0.5 + Math.random() * 2);
@@ -603,6 +607,20 @@ export default function Home() {
               imageData={asciiImageData}
               imageInvert={asciiImageInvert}
               imageAnimate={asciiImageAnimate}
+              cellSize={asciiCellSize}
+              characterSet={asciiCharacterSet as any}
+              customChars={asciiCustomChars}
+              fontFamily={asciiFontFamily as any}
+              charSpacingX={asciiCharSpacingX}
+              charSpacingY={asciiCharSpacingY}
+              contrast={asciiContrast}
+              brightness={asciiBrightness}
+              bgOpacity={asciiBgOpacity}
+              renderMode={asciiRenderMode as any}
+              glowEffect={asciiGlowEffect}
+              glowIntensity={asciiGlowIntensity}
+              scanlines={asciiScanlines}
+              chromatic={asciiChromatic}
             />
           )}
           {type === "wavefield" && (
@@ -637,21 +655,6 @@ export default function Home() {
               hueEnd={hueEnd}
               saturation={saturation}
               lightness={lightness}
-            />
-          )}
-          {type === "geometric" && (
-            <GeometricCanvas
-              ref={geometricCanvasRef}
-              shape={geoShape as any}
-              shapeCount={shapeCount}
-              motionPattern={motionPattern as any}
-              motionSpeed={motionSpeed}
-              primaryColor={primaryColor}
-              accentColor={accentColor}
-              backgroundColor={bgColor}
-              enableNoise={enableNoise}
-              enableVignette={enableVignette}
-              seed={seed}
             />
           )}
           {type === "shader" && (
@@ -698,12 +701,6 @@ export default function Home() {
                   className="text-sm text-neutral-300 data-[state=active]:bg-neutral-700 data-[state=active]:text-white"
                 >
                   Tunnel
-                </TabsTrigger>
-                <TabsTrigger
-                  value="geometric"
-                  className="text-sm text-neutral-300 data-[state=active]:bg-neutral-700 data-[state=active]:text-white"
-                >
-                  Geometric
                 </TabsTrigger>
                 <TabsTrigger
                   value="shader"
@@ -761,20 +758,6 @@ export default function Home() {
                   </SelectContent>
                 </Select>
               )}
-              {type === "geometric" && (
-                <Select value={geoShape} onValueChange={setGeoShape}>
-                  <SelectTrigger className="w-32 h-9 text-sm bg-neutral-800 border-neutral-700 text-neutral-200">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-neutral-800 border-neutral-700">
-                    {geometricShapes.map((s) => (
-                      <SelectItem key={s.value} value={s.value} className="text-sm text-neutral-200">
-                        {s.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
               {type === "shader" && (
                 <Select value={shaderPattern} onValueChange={setShaderPattern}>
                   <SelectTrigger className="w-32 h-9 text-sm bg-neutral-800 border-neutral-700 text-neutral-200">
@@ -796,7 +779,7 @@ export default function Home() {
             {/* Primary Slider with Input */}
             <div className="flex items-center gap-3 min-w-[220px]">
               <Label className="text-sm text-neutral-400 w-12">
-                {type === "ascii" ? "Speed" : type === "wavefield" ? "Lines" : type === "tunnel" ? "Speed" : type === "shader" ? "Speed" : "Count"}
+                {type === "ascii" ? "Speed" : type === "wavefield" ? "Lines" : type === "tunnel" ? "Speed" : "Speed"}
               </Label>
               {type === "ascii" && (
                 <>
@@ -870,30 +853,6 @@ export default function Home() {
                   />
                 </>
               )}
-              {type === "geometric" && (
-                <>
-                  <Slider
-                    value={[shapeCount]}
-                    onValueChange={([v]) => setShapeCount(v)}
-                    min={1}
-                    max={8}
-                    step={1}
-                    className="flex-1"
-                  />
-                  <Input
-                    type="number"
-                    value={shapeCount}
-                    onChange={(e) => {
-                      const v = parseInt(e.target.value);
-                      if (!isNaN(v)) setShapeCount(Math.min(8, Math.max(1, v)));
-                    }}
-                    min={1}
-                    max={8}
-                    step={1}
-                    className="h-7 w-16 text-xs text-right bg-neutral-800 border-neutral-700 text-neutral-200 px-2"
-                  />
-                </>
-              )}
               {type === "shader" && (
                 <>
                   <Slider
@@ -959,6 +918,21 @@ export default function Home() {
                 {type === "ascii" && (
                   <>
                     <div className="space-y-2">
+                      <Label className="text-xs text-neutral-400">Characters</Label>
+                      <Select value={asciiCharacterSet} onValueChange={setAsciiCharacterSet}>
+                        <SelectTrigger className="h-8 text-xs bg-neutral-800 border-neutral-700 text-neutral-200">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-neutral-800 border-neutral-700">
+                          {asciiCharacterSets.map((c) => (
+                            <SelectItem key={c.value} value={c.value} className="text-xs text-neutral-200">
+                              {c.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
                       <Label className="text-xs text-neutral-400">Color Mode</Label>
                       <Select value={asciiColorMode} onValueChange={setAsciiColorMode}>
                         <SelectTrigger className="h-8 text-xs bg-neutral-800 border-neutral-700 text-neutral-200">
@@ -974,12 +948,38 @@ export default function Home() {
                       </Select>
                     </div>
                     <SliderWithInput
+                      label="Cell Size"
+                      value={asciiCellSize}
+                      onChange={setAsciiCellSize}
+                      min={4}
+                      max={32}
+                      step={1}
+                      decimals={0}
+                    />
+                    <SliderWithInput
                       label="Density"
                       value={asciiDensity}
                       onChange={setAsciiDensity}
                       min={0.5}
-                      max={1.5}
+                      max={2}
                       step={0.1}
+                    />
+                    <SliderWithInput
+                      label="Contrast"
+                      value={asciiContrast}
+                      onChange={setAsciiContrast}
+                      min={0.5}
+                      max={2}
+                      step={0.1}
+                    />
+                    <SliderWithInput
+                      label="Brightness"
+                      value={asciiBrightness}
+                      onChange={setAsciiBrightness}
+                      min={-0.5}
+                      max={0.5}
+                      step={0.05}
+                      decimals={2}
                     />
                     {asciiColorMode === "single" && (
                       <div className="space-y-2">
@@ -992,6 +992,111 @@ export default function Home() {
                         />
                       </div>
                     )}
+                    {/* Character & Font Settings */}
+                    <div className="col-span-2 md:col-span-4 lg:col-span-6 border-t border-neutral-700 pt-3 mt-2">
+                      <Label className="text-xs text-neutral-300 font-medium">Character Settings</Label>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs text-neutral-400">Font</Label>
+                      <Select value={asciiFontFamily} onValueChange={setAsciiFontFamily}>
+                        <SelectTrigger className="h-8 text-xs bg-neutral-800 border-neutral-700 text-neutral-200">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-neutral-800 border-neutral-700">
+                          {asciiFontFamilies.map((f) => (
+                            <SelectItem key={f.value} value={f.value} className="text-xs text-neutral-200">
+                              {f.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <SliderWithInput
+                      label="Spacing X"
+                      value={asciiCharSpacingX}
+                      onChange={setAsciiCharSpacingX}
+                      min={0.3}
+                      max={1.2}
+                      step={0.05}
+                      decimals={2}
+                    />
+                    <SliderWithInput
+                      label="Spacing Y"
+                      value={asciiCharSpacingY}
+                      onChange={setAsciiCharSpacingY}
+                      min={0.5}
+                      max={1.5}
+                      step={0.05}
+                      decimals={2}
+                    />
+                    <SliderWithInput
+                      label="BG Opacity"
+                      value={asciiBgOpacity}
+                      onChange={setAsciiBgOpacity}
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      decimals={2}
+                    />
+                    {asciiCharacterSet === "custom" && (
+                      <div className="col-span-2 space-y-2">
+                        <Label className="text-xs text-neutral-400">Custom Characters</Label>
+                        <Input
+                          type="text"
+                          value={asciiCustomChars}
+                          onChange={(e) => setAsciiCustomChars(e.target.value)}
+                          placeholder="Enter characters..."
+                          className="h-8 text-xs bg-neutral-800 border-neutral-700 text-neutral-200"
+                        />
+                      </div>
+                    )}
+                    {/* Effects */}
+                    <div className="col-span-2 md:col-span-4 lg:col-span-6 border-t border-neutral-700 pt-3 mt-2">
+                      <Label className="text-xs text-neutral-300 font-medium">Effects</Label>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs text-neutral-400">Glow</Label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={asciiGlowEffect}
+                          onChange={(e) => setAsciiGlowEffect(e.target.checked)}
+                          className="rounded border-neutral-700 h-4 w-4"
+                        />
+                      </div>
+                    </div>
+                    {asciiGlowEffect && (
+                      <SliderWithInput
+                        label="Glow Int."
+                        value={asciiGlowIntensity}
+                        onChange={setAsciiGlowIntensity}
+                        min={0.5}
+                        max={3}
+                        step={0.1}
+                      />
+                    )}
+                    <div className="space-y-2">
+                      <Label className="text-xs text-neutral-400">Scanlines</Label>
+                      <div className="flex items-center h-8">
+                        <input
+                          type="checkbox"
+                          checked={asciiScanlines}
+                          onChange={(e) => setAsciiScanlines(e.target.checked)}
+                          className="rounded border-neutral-700 h-4 w-4"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs text-neutral-400">Chromatic</Label>
+                      <div className="flex items-center h-8">
+                        <input
+                          type="checkbox"
+                          checked={asciiChromatic}
+                          onChange={(e) => setAsciiChromatic(e.target.checked)}
+                          className="rounded border-neutral-700 h-4 w-4"
+                        />
+                      </div>
+                    </div>
                     {/* 3D Rotation Controls - only for 3D patterns */}
                     {(asciiPattern === "donut" || asciiPattern === "cube" || asciiPattern === "sphere") && (
                       <>
@@ -1101,6 +1206,21 @@ export default function Home() {
                               </Button>
                             )}
                           </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-xs text-neutral-400">Render Mode</Label>
+                          <Select value={asciiRenderMode} onValueChange={setAsciiRenderMode}>
+                            <SelectTrigger className="h-8 text-xs bg-neutral-800 border-neutral-700 text-neutral-200">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="bg-neutral-800 border-neutral-700">
+                              {asciiRenderModes.map((r) => (
+                                <SelectItem key={r.value} value={r.value} className="text-xs text-neutral-200">
+                                  {r.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                         <div className="space-y-2">
                           <Label className="text-xs text-neutral-400">Invert</Label>
@@ -1256,61 +1376,6 @@ export default function Home() {
                           className="rounded border-neutral-700 h-4 w-4"
                         />
                       </div>
-                    </div>
-                  </>
-                )}
-
-                {type === "geometric" && (
-                  <>
-                    <div className="space-y-2">
-                      <Label className="text-xs text-neutral-400">Motion</Label>
-                      <Select value={motionPattern} onValueChange={setMotionPattern}>
-                        <SelectTrigger className="h-8 text-xs bg-neutral-800 border-neutral-700 text-neutral-200">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="bg-neutral-800 border-neutral-700">
-                          {motionPatterns.map((m) => (
-                            <SelectItem key={m.value} value={m.value} className="text-xs text-neutral-200">
-                              {m.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <SliderWithInput
-                      label="Speed"
-                      value={motionSpeed}
-                      onChange={setMotionSpeed}
-                      min={0.1}
-                      max={3}
-                      step={0.1}
-                    />
-                    <div className="space-y-2">
-                      <Label className="text-xs text-neutral-400">Primary</Label>
-                      <Input
-                        type="color"
-                        value={primaryColor}
-                        onChange={(e) => setPrimaryColor(e.target.value)}
-                        className="h-8 w-full p-1 bg-neutral-800 border-neutral-700"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs text-neutral-400">Accent</Label>
-                      <Input
-                        type="color"
-                        value={accentColor}
-                        onChange={(e) => setAccentColor(e.target.value)}
-                        className="h-8 w-full p-1 bg-neutral-800 border-neutral-700"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs text-neutral-400">Background</Label>
-                      <Input
-                        type="color"
-                        value={bgColor}
-                        onChange={(e) => setBgColor(e.target.value)}
-                        className="h-8 w-full p-1 bg-neutral-800 border-neutral-700"
-                      />
                     </div>
                   </>
                 )}
