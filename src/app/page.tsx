@@ -1676,7 +1676,7 @@ export default function Home() {
                       value={isometricHeightScale}
                       onChange={setIsometricHeightScale}
                       min={0.3}
-                      max={3}
+                      max={6}
                       step={0.1}
                     />
                     <SliderWithInput
@@ -1684,7 +1684,7 @@ export default function Home() {
                       value={isometricSpeed}
                       onChange={setIsometricSpeed}
                       min={0.1}
-                      max={2}
+                      max={5}
                       step={0.1}
                     />
                     <SliderWithInput

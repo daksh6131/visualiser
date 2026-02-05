@@ -68,10 +68,21 @@ const hexToRgb = (hex: string): { r: number; g: number; b: number } => {
     : { r: 51, g: 102, b: 255 };
 };
 
-// Apply shade to color
-const shadeColor = (hex: string, shade: number): string => {
-  const { r, g, b } = hexToRgb(hex);
+// Apply shade to color (supports both hex and rgb() strings)
+const shadeColor = (color: string, shade: number): string => {
   const clamp = (n: number) => Math.max(0, Math.min(255, Math.round(n)));
+
+  // Check if it's an rgb() string
+  const rgbMatch = color.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/);
+  if (rgbMatch) {
+    const r = parseInt(rgbMatch[1], 10);
+    const g = parseInt(rgbMatch[2], 10);
+    const b = parseInt(rgbMatch[3], 10);
+    return `rgb(${clamp(r * shade)}, ${clamp(g * shade)}, ${clamp(b * shade)})`;
+  }
+
+  // Otherwise treat as hex
+  const { r, g, b } = hexToRgb(color);
   return `rgb(${clamp(r * shade)}, ${clamp(g * shade)}, ${clamp(b * shade)})`;
 };
 
