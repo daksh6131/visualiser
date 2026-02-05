@@ -295,6 +295,8 @@ export const AsciiCanvas = forwardRef<AsciiCanvasHandle, AsciiCanvasProps>(({
     const cosC = Math.cos(C), sinC = Math.sin(C);
 
     // Helper to draw character with effects
+    // Note: Chromatic aberration is applied as a post-process effect instead of per-character
+    // to avoid 3x draw calls which causes major performance issues
     const drawChar = (char: string, x: number, y: number, colorValue: number, col: number, row: number) => {
       const color = getColor(colorValue, props, col, row);
 
@@ -305,20 +307,8 @@ export const AsciiCanvas = forwardRef<AsciiCanvasHandle, AsciiCanvasProps>(({
         ctx.shadowBlur = 0;
       }
 
-      if (props.chromatic) {
-        // Draw with color separation
-        ctx.globalCompositeOperation = 'lighter';
-        ctx.fillStyle = `rgba(255, 0, 0, ${colorValue * 0.5})`;
-        ctx.fillText(char, x - 1, y);
-        ctx.fillStyle = `rgba(0, 255, 0, ${colorValue * 0.5})`;
-        ctx.fillText(char, x, y);
-        ctx.fillStyle = `rgba(0, 0, 255, ${colorValue * 0.5})`;
-        ctx.fillText(char, x + 1, y);
-        ctx.globalCompositeOperation = 'source-over';
-      } else {
-        ctx.fillStyle = color;
-        ctx.fillText(char, x, y);
-      }
+      ctx.fillStyle = color;
+      ctx.fillText(char, x, y);
     };
 
     // Helper to get char index from value
@@ -815,6 +805,24 @@ export const AsciiCanvas = forwardRef<AsciiCanvasHandle, AsciiCanvasProps>(({
       for (let y = 0; y < height; y += 4) {
         ctx.fillRect(0, y, width, 2);
       }
+    }
+
+    // Apply chromatic aberration using canvas compositing (much faster than pixel manipulation)
+    // This creates a subtle RGB split effect without heavy pixel processing
+    if (props.chromatic) {
+      // Save current canvas content
+      ctx.globalCompositeOperation = 'source-over';
+
+      // Draw red-shifted copy
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.3;
+      ctx.drawImage(canvas, 2, 0); // Shift right for red
+
+      // Draw blue-shifted copy
+      ctx.drawImage(canvas, -2, 0); // Shift left for blue
+
+      ctx.globalAlpha = 1.0;
+      ctx.globalCompositeOperation = 'source-over';
     }
 
     animationRef.current = requestAnimationFrame(render);
