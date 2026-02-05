@@ -5,9 +5,7 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true,
   },
-  // For GitHub Pages deployment
-  basePath: process.env.NODE_ENV === "production" ? "/visualiser" : "",
-  assetPrefix: process.env.NODE_ENV === "production" ? "/visualiser/" : "",
+  // No basePath needed for custom domain (visualiser.pixeluplabs.com)
 };
 
 export default nextConfig;
