@@ -18,6 +18,7 @@ import { ShaderCanvas, ShaderCanvasHandle } from "@/components/ShaderCanvas";
 import { TunnelCanvas, TunnelCanvasHandle } from "@/components/TunnelCanvas";
 import { WaveCanvas, WaveCanvasHandle } from "@/components/WaveCanvas";
 import { AsciiCanvas, AsciiCanvasHandle } from "@/components/AsciiCanvas";
+import { IsometricCanvas, IsometricCanvasHandle } from "@/components/IsometricCanvas";
 import { DownloadButton } from "@/components/DownloadButton";
 
 // Design state interface for save/load
@@ -74,6 +75,22 @@ interface DesignState {
   ssy?: number; // shaderSymmetry
   sz?: number; // shaderZoom
   sr?: number; // shaderRotation
+  // Isometric
+  ip?: string; // isometricPattern
+  igs?: number; // gridSize
+  ics?: number; // cubeSize
+  ihs?: number; // heightScale
+  isp?: number; // speed
+  ins?: number; // noiseScale
+  ibc?: string; // baseColor
+  isc?: string; // strokeColor
+  isw?: number; // strokeWidth
+  icm?: string; // colorMode
+  its?: number; // topShade
+  ils?: number; // leftShade
+  irs?: number; // rightShade
+  ieg?: number; // enableGlow (0/1)
+  igi?: number; // glowIntensity
 }
 
 // Encode design state to URL-safe string
@@ -218,7 +235,23 @@ const shaderPatterns = [
   { value: "waves", label: "Waves" },
 ];
 
-type AnimationType = "wavefield" | "ascii" | "tunnel" | "shader";
+const isometricPatterns = [
+  { value: "noise", label: "Noise Terrain" },
+  { value: "radial", label: "Radial Wave" },
+  { value: "pyramid", label: "Pyramid" },
+  { value: "waves", label: "Waves" },
+  { value: "ripple", label: "Ripple" },
+  { value: "terrain", label: "Terrain" },
+];
+
+const isometricColorModes = [
+  { value: "single", label: "Single Color" },
+  { value: "rainbow", label: "Rainbow" },
+  { value: "height", label: "Height Map" },
+  { value: "gradient", label: "Gradient" },
+];
+
+type AnimationType = "wavefield" | "ascii" | "tunnel" | "shader" | "isometric";
 
 export default function Home() {
   const [type, setType] = useState<AnimationType>("shader");
@@ -229,6 +262,7 @@ export default function Home() {
   const tunnelCanvasRef = useRef<TunnelCanvasHandle>(null);
   const waveCanvasRef = useRef<WaveCanvasHandle>(null);
   const asciiCanvasRef = useRef<AsciiCanvasHandle>(null);
+  const isometricCanvasRef = useRef<IsometricCanvasHandle>(null);
 
   // Get the currently active canvas element
   const getActiveCanvas = useCallback(() => {
@@ -241,6 +275,8 @@ export default function Home() {
         return waveCanvasRef.current?.getCanvas() ?? null;
       case "ascii":
         return asciiCanvasRef.current?.getCanvas() ?? null;
+      case "isometric":
+        return isometricCanvasRef.current?.getCanvas() ?? null;
       default:
         return null;
     }
@@ -358,6 +394,23 @@ export default function Home() {
   const [shaderZoom, setShaderZoom] = useState(1);
   const [shaderRotation, setShaderRotation] = useState(0);
 
+  // Isometric
+  const [isometricPattern, setIsometricPattern] = useState("noise");
+  const [isometricGridSize, setIsometricGridSize] = useState(12);
+  const [isometricCubeSize, setIsometricCubeSize] = useState(30);
+  const [isometricHeightScale, setIsometricHeightScale] = useState(1.5);
+  const [isometricSpeed, setIsometricSpeed] = useState(0.8);
+  const [isometricNoiseScale, setIsometricNoiseScale] = useState(2);
+  const [isometricBaseColor, setIsometricBaseColor] = useState("#3366ff");
+  const [isometricStrokeColor, setIsometricStrokeColor] = useState("#6699ff");
+  const [isometricStrokeWidth, setIsometricStrokeWidth] = useState(1);
+  const [isometricColorMode, setIsometricColorMode] = useState("single");
+  const [isometricTopShade, setIsometricTopShade] = useState(1.2);
+  const [isometricLeftShade, setIsometricLeftShade] = useState(0.8);
+  const [isometricRightShade, setIsometricRightShade] = useState(0.5);
+  const [isometricEnableGlow, setIsometricEnableGlow] = useState(false);
+  const [isometricGlowIntensity, setIsometricGlowIntensity] = useState(1);
+
   // Rainbow config
   const [hueStart, setHueStart] = useState(0);
   const [hueEnd, setHueEnd] = useState(360);
@@ -429,6 +482,22 @@ export default function Home() {
         if (state.ssy !== undefined) setShaderSymmetry(state.ssy);
         if (state.sz !== undefined) setShaderZoom(state.sz);
         if (state.sr !== undefined) setShaderRotation(state.sr);
+        // Isometric
+        if (state.ip) setIsometricPattern(state.ip);
+        if (state.igs !== undefined) setIsometricGridSize(state.igs);
+        if (state.ics !== undefined) setIsometricCubeSize(state.ics);
+        if (state.ihs !== undefined) setIsometricHeightScale(state.ihs);
+        if (state.isp !== undefined) setIsometricSpeed(state.isp);
+        if (state.ins !== undefined) setIsometricNoiseScale(state.ins);
+        if (state.ibc) setIsometricBaseColor(state.ibc);
+        if (state.isc) setIsometricStrokeColor(state.isc);
+        if (state.isw !== undefined) setIsometricStrokeWidth(state.isw);
+        if (state.icm) setIsometricColorMode(state.icm);
+        if (state.its !== undefined) setIsometricTopShade(state.its);
+        if (state.ils !== undefined) setIsometricLeftShade(state.ils);
+        if (state.irs !== undefined) setIsometricRightShade(state.irs);
+        if (state.ieg !== undefined) setIsometricEnableGlow(state.ieg === 1);
+        if (state.igi !== undefined) setIsometricGlowIntensity(state.igi);
       }
     }
   }, []);
@@ -488,6 +557,22 @@ export default function Home() {
       state.ssy = shaderSymmetry;
       state.sz = shaderZoom;
       state.sr = shaderRotation;
+    } else if (type === 'isometric') {
+      state.ip = isometricPattern;
+      state.igs = isometricGridSize;
+      state.ics = isometricCubeSize;
+      state.ihs = isometricHeightScale;
+      state.isp = isometricSpeed;
+      state.ins = isometricNoiseScale;
+      state.ibc = isometricBaseColor;
+      state.isc = isometricStrokeColor;
+      state.isw = isometricStrokeWidth;
+      state.icm = isometricColorMode;
+      state.its = isometricTopShade;
+      state.ils = isometricLeftShade;
+      state.irs = isometricRightShade;
+      state.ieg = isometricEnableGlow ? 1 : 0;
+      state.igi = isometricGlowIntensity;
     }
 
     const encoded = encodeDesign(state);
@@ -499,7 +584,10 @@ export default function Home() {
     rotationX, rotationY, rotationZ, autoRotate, autoRotateSpeedX, autoRotateSpeedY, autoRotateSpeedZ,
     wavePattern, lineCount, waveAmplitude, waveFrequency, waveSpeed, wavePerspective, waveColorMode, waveColor,
     tunnelShape, tunnelPatternType, zoomSpeed, zoomDirection, layerCount, tunnelRotation, enableGlow, glowIntensity,
-    shaderPattern, shaderSpeed, shaderComplexity, shaderColorA, shaderColorB, shaderColorC, shaderSymmetry, shaderZoom, shaderRotation
+    shaderPattern, shaderSpeed, shaderComplexity, shaderColorA, shaderColorB, shaderColorC, shaderSymmetry, shaderZoom, shaderRotation,
+    isometricPattern, isometricGridSize, isometricCubeSize, isometricHeightScale, isometricSpeed, isometricNoiseScale,
+    isometricBaseColor, isometricStrokeColor, isometricStrokeWidth, isometricColorMode,
+    isometricTopShade, isometricLeftShade, isometricRightShade, isometricEnableGlow, isometricGlowIntensity
   ]);
 
   // Copy share link to clipboard
@@ -573,6 +661,63 @@ export default function Home() {
       setShaderColorA(randomColor());
       setShaderColorB(randomColor());
       setShaderColorC(randomColor());
+    } else if (type === "isometric") {
+      // Pleasing randomization for isometric cubes
+      setIsometricPattern(isometricPatterns[Math.floor(Math.random() * isometricPatterns.length)].value);
+
+      // Grid size: favor medium grids (10-16) for best visual balance
+      setIsometricGridSize(10 + Math.floor(Math.random() * 7));
+
+      // Cube size: favor larger cubes (25-45) for clarity
+      setIsometricCubeSize(25 + Math.floor(Math.random() * 20));
+
+      // Height scale: moderate range looks best (1.0-2.0)
+      setIsometricHeightScale(1.0 + Math.random() * 1.0);
+
+      // Speed: favor slower, smoother animations (0.5-1.2)
+      setIsometricSpeed(0.5 + Math.random() * 0.7);
+
+      // Noise scale: moderate values (1.5-3.0) for pleasing terrain
+      setIsometricNoiseScale(1.5 + Math.random() * 1.5);
+
+      // Color mode: weighted toward single and height for cleaner look
+      const colorModeRoll = Math.random();
+      if (colorModeRoll < 0.4) {
+        setIsometricColorMode("single");
+      } else if (colorModeRoll < 0.7) {
+        setIsometricColorMode("height");
+      } else if (colorModeRoll < 0.9) {
+        setIsometricColorMode("gradient");
+      } else {
+        setIsometricColorMode("rainbow");
+      }
+
+      // Pleasing color palettes for isometric
+      const palettes = [
+        { base: "#3366ff", stroke: "#6699ff" }, // Classic blue
+        { base: "#8b5cf6", stroke: "#a78bfa" }, // Purple
+        { base: "#06b6d4", stroke: "#22d3ee" }, // Cyan
+        { base: "#10b981", stroke: "#34d399" }, // Emerald
+        { base: "#f59e0b", stroke: "#fbbf24" }, // Amber
+        { base: "#ef4444", stroke: "#f87171" }, // Red
+        { base: "#ec4899", stroke: "#f472b6" }, // Pink
+        { base: "#6366f1", stroke: "#818cf8" }, // Indigo
+      ];
+      const palette = palettes[Math.floor(Math.random() * palettes.length)];
+      setIsometricBaseColor(palette.base);
+      setIsometricStrokeColor(palette.stroke);
+
+      // Stroke width: favor thin strokes (0.5-1.5)
+      setIsometricStrokeWidth(0.5 + Math.random() * 1);
+
+      // Shading: keep realistic lighting ratios
+      setIsometricTopShade(1.1 + Math.random() * 0.2);    // 1.1-1.3 (brightest)
+      setIsometricLeftShade(0.7 + Math.random() * 0.2);   // 0.7-0.9 (medium)
+      setIsometricRightShade(0.4 + Math.random() * 0.2);  // 0.4-0.6 (darkest)
+
+      // Glow: occasional, subtle
+      setIsometricEnableGlow(Math.random() > 0.7);
+      setIsometricGlowIntensity(0.5 + Math.random() * 0.8);
     }
 
     // Randomize rainbow
@@ -673,6 +818,31 @@ export default function Home() {
               seed={seed}
             />
           )}
+          {type === "isometric" && (
+            <IsometricCanvas
+              ref={isometricCanvasRef}
+              heightPattern={isometricPattern as any}
+              gridSize={isometricGridSize}
+              cubeSize={isometricCubeSize}
+              heightScale={isometricHeightScale}
+              speed={isometricSpeed}
+              noiseScale={isometricNoiseScale}
+              baseColor={isometricBaseColor}
+              strokeColor={isometricStrokeColor}
+              strokeWidth={isometricStrokeWidth}
+              colorMode={isometricColorMode as any}
+              topShade={isometricTopShade}
+              leftShade={isometricLeftShade}
+              rightShade={isometricRightShade}
+              enableGlow={isometricEnableGlow}
+              glowIntensity={isometricGlowIntensity}
+              hueStart={hueStart}
+              hueEnd={hueEnd}
+              saturation={saturation}
+              lightness={lightness}
+              seed={seed}
+            />
+          )}
         </div>
       </div>
 
@@ -707,6 +877,12 @@ export default function Home() {
                   className="text-sm text-neutral-300 data-[state=active]:bg-neutral-700 data-[state=active]:text-white"
                 >
                   Shader
+                </TabsTrigger>
+                <TabsTrigger
+                  value="isometric"
+                  className="text-sm text-neutral-300 data-[state=active]:bg-neutral-700 data-[state=active]:text-white"
+                >
+                  Isometric
                 </TabsTrigger>
               </TabsList>
             </Tabs>
@@ -772,6 +948,20 @@ export default function Home() {
                   </SelectContent>
                 </Select>
               )}
+              {type === "isometric" && (
+                <Select value={isometricPattern} onValueChange={setIsometricPattern}>
+                  <SelectTrigger className="w-32 h-9 text-sm bg-neutral-800 border-neutral-700 text-neutral-200">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-neutral-800 border-neutral-700">
+                    {isometricPatterns.map((p) => (
+                      <SelectItem key={p.value} value={p.value} className="text-sm text-neutral-200">
+                        {p.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
 
             <div className="h-6 w-px bg-neutral-700" />
@@ -779,7 +969,7 @@ export default function Home() {
             {/* Primary Slider with Input */}
             <div className="flex items-center gap-3 min-w-[220px]">
               <Label className="text-sm text-neutral-400 w-12">
-                {type === "ascii" ? "Speed" : type === "wavefield" ? "Lines" : type === "tunnel" ? "Speed" : "Speed"}
+                {type === "ascii" ? "Speed" : type === "wavefield" ? "Lines" : type === "tunnel" ? "Speed" : type === "isometric" ? "Grid" : "Speed"}
               </Label>
               {type === "ascii" && (
                 <>
@@ -873,6 +1063,30 @@ export default function Home() {
                     min={0.1}
                     max={3}
                     step={0.1}
+                    className="h-7 w-16 text-xs text-right bg-neutral-800 border-neutral-700 text-neutral-200 px-2"
+                  />
+                </>
+              )}
+              {type === "isometric" && (
+                <>
+                  <Slider
+                    value={[isometricGridSize]}
+                    onValueChange={([v]) => setIsometricGridSize(v)}
+                    min={5}
+                    max={20}
+                    step={1}
+                    className="flex-1"
+                  />
+                  <Input
+                    type="number"
+                    value={isometricGridSize}
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value);
+                      if (!isNaN(v)) setIsometricGridSize(Math.min(20, Math.max(5, v)));
+                    }}
+                    min={5}
+                    max={20}
+                    step={1}
                     className="h-7 w-16 text-xs text-right bg-neutral-800 border-neutral-700 text-neutral-200 px-2"
                   />
                 </>
@@ -1443,6 +1657,133 @@ export default function Home() {
                         className="h-8 w-full p-1 bg-neutral-800 border-neutral-700"
                       />
                     </div>
+                  </>
+                )}
+
+                {type === "isometric" && (
+                  <>
+                    <SliderWithInput
+                      label="Cube Size"
+                      value={isometricCubeSize}
+                      onChange={setIsometricCubeSize}
+                      min={15}
+                      max={50}
+                      step={1}
+                      decimals={0}
+                    />
+                    <SliderWithInput
+                      label="Height"
+                      value={isometricHeightScale}
+                      onChange={setIsometricHeightScale}
+                      min={0.3}
+                      max={3}
+                      step={0.1}
+                    />
+                    <SliderWithInput
+                      label="Speed"
+                      value={isometricSpeed}
+                      onChange={setIsometricSpeed}
+                      min={0.1}
+                      max={2}
+                      step={0.1}
+                    />
+                    <SliderWithInput
+                      label="Noise Scale"
+                      value={isometricNoiseScale}
+                      onChange={setIsometricNoiseScale}
+                      min={0.5}
+                      max={5}
+                      step={0.1}
+                    />
+                    <div className="space-y-2">
+                      <Label className="text-xs text-neutral-400">Color Mode</Label>
+                      <Select value={isometricColorMode} onValueChange={setIsometricColorMode}>
+                        <SelectTrigger className="h-8 text-xs bg-neutral-800 border-neutral-700 text-neutral-200">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-neutral-800 border-neutral-700">
+                          {isometricColorModes.map((m) => (
+                            <SelectItem key={m.value} value={m.value} className="text-xs text-neutral-200">
+                              {m.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs text-neutral-400">Base Color</Label>
+                      <Input
+                        type="color"
+                        value={isometricBaseColor}
+                        onChange={(e) => setIsometricBaseColor(e.target.value)}
+                        className="h-8 w-full p-1 bg-neutral-800 border-neutral-700"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs text-neutral-400">Stroke Color</Label>
+                      <Input
+                        type="color"
+                        value={isometricStrokeColor}
+                        onChange={(e) => setIsometricStrokeColor(e.target.value)}
+                        className="h-8 w-full p-1 bg-neutral-800 border-neutral-700"
+                      />
+                    </div>
+                    <SliderWithInput
+                      label="Stroke"
+                      value={isometricStrokeWidth}
+                      onChange={setIsometricStrokeWidth}
+                      min={0}
+                      max={3}
+                      step={0.5}
+                    />
+                    <SliderWithInput
+                      label="Top Shade"
+                      value={isometricTopShade}
+                      onChange={setIsometricTopShade}
+                      min={0.5}
+                      max={1.5}
+                      step={0.05}
+                      decimals={2}
+                    />
+                    <SliderWithInput
+                      label="Left Shade"
+                      value={isometricLeftShade}
+                      onChange={setIsometricLeftShade}
+                      min={0.3}
+                      max={1.2}
+                      step={0.05}
+                      decimals={2}
+                    />
+                    <SliderWithInput
+                      label="Right Shade"
+                      value={isometricRightShade}
+                      onChange={setIsometricRightShade}
+                      min={0.2}
+                      max={1}
+                      step={0.05}
+                      decimals={2}
+                    />
+                    <div className="space-y-2">
+                      <Label className="text-xs text-neutral-400">Glow</Label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={isometricEnableGlow}
+                          onChange={(e) => setIsometricEnableGlow(e.target.checked)}
+                          className="rounded border-neutral-700 h-4 w-4"
+                        />
+                      </div>
+                    </div>
+                    {isometricEnableGlow && (
+                      <SliderWithInput
+                        label="Glow Int."
+                        value={isometricGlowIntensity}
+                        onChange={setIsometricGlowIntensity}
+                        min={0.3}
+                        max={2}
+                        step={0.1}
+                      />
+                    )}
                   </>
                 )}
 
