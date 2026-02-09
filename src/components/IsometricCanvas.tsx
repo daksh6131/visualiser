@@ -456,15 +456,18 @@ export const IsometricCanvas = forwardRef<IsometricCanvasHandle, IsometricCanvas
         const width = canvas.width;
         const height = canvas.height;
 
-        // Clear canvas (before any transforms)
+        // Clear canvas
         ctx.fillStyle = p.backgroundColor;
         ctx.fillRect(0, 0, width, height);
 
         // Calculate rotation angle around Z-axis (add auto-rotation if enabled)
+        // This rotates the terrain data, not the view
         const rotationDeg = p.autoRotate
           ? (p.rotation + elapsed * p.autoRotateSpeed * 60) % 360
           : p.rotation;
         const rotationRad = (rotationDeg * Math.PI) / 180;
+        const cosR = Math.cos(rotationRad);
+        const sinR = Math.sin(rotationRad);
 
         // Calculate tile dimensions
         const tileWidth = p.cubeSize * 2;
@@ -478,12 +481,8 @@ export const IsometricCanvas = forwardRef<IsometricCanvasHandle, IsometricCanvas
         const originX = width / 2;
         const originY = height / 2 - gridPixelHeight / 4 + maxCubeHeight / 2;
 
-        // Apply canvas rotation around center of screen
-        // This rotates the entire scene as one unit - cubes stay in phase
-        ctx.save();
-        ctx.translate(width / 2, height / 2);
-        ctx.rotate(rotationRad);
-        ctx.translate(-width / 2, -height / 2);
+        // Grid center for rotation
+        const gridCenter = (p.gridSize - 1) / 2;
 
         // Enable glow if configured
         if (p.enableGlow) {
@@ -494,16 +493,22 @@ export const IsometricCanvas = forwardRef<IsometricCanvasHandle, IsometricCanvas
         }
 
         // Painter's algorithm: draw back to front
-        // Standard diagonal band iteration (no rotation needed for sort - canvas handles it)
         for (let sum = 0; sum < p.gridSize * 2 - 1; sum++) {
           for (let gridX = 0; gridX < p.gridSize; gridX++) {
             const gridY = sum - gridX;
             if (gridY < 0 || gridY >= p.gridSize) continue;
 
-            // Calculate height for this cube
+            // Rotate the sampling coordinates around Z-axis
+            // This makes the terrain rotate while cubes stay in place
+            const cx = gridX - gridCenter;
+            const cy = gridY - gridCenter;
+            const sampX = cx * cosR - cy * sinR + gridCenter;
+            const sampY = cx * sinR + cy * cosR + gridCenter;
+
+            // Calculate height using rotated sampling coordinates
             const normalizedHeight = getHeight(
-              gridX,
-              gridY,
+              sampX,
+              sampY,
               p.gridSize,
               elapsed,
               p.heightPattern as HeightPattern,
@@ -513,7 +518,7 @@ export const IsometricCanvas = forwardRef<IsometricCanvasHandle, IsometricCanvas
             );
             const cubeHeightPx = normalizedHeight * p.cubeSize;
 
-            // Get screen position (standard isometric projection)
+            // Get screen position (standard isometric - no rotation here)
             const { x: screenX, y: screenY } = gridToScreen(
               gridX,
               gridY,
@@ -524,10 +529,10 @@ export const IsometricCanvas = forwardRef<IsometricCanvasHandle, IsometricCanvas
               originY
             );
 
-            // Determine cube color
+            // Determine cube color using rotated sampling
             const cubeColor = getCubeColor(
-              gridX,
-              gridY,
+              sampX,
+              sampY,
               normalizedHeight,
               p.heightScale,
               elapsed,
@@ -562,8 +567,8 @@ export const IsometricCanvas = forwardRef<IsometricCanvasHandle, IsometricCanvas
           }
         }
 
-        // Restore canvas state (removes rotation)
-        ctx.restore();
+        // Reset shadow
+        ctx.shadowBlur = 0;
 
         animationRef.current = requestAnimationFrame(render);
       },
