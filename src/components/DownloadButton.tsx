@@ -67,7 +67,8 @@ export const DownloadButton: React.FC<DownloadButtonProps> = ({ canvasRef }) => 
           setProgress(Math.round(50 + ratio * 50)); // 50-100% for conversion
         },
         // Use single-threaded core that doesn't require SharedArrayBuffer
-        corePath: "https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js",
+        // This works on GitHub Pages and other static hosts without COOP/COEP headers
+        corePath: "https://unpkg.com/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js",
       });
 
       await ffmpeg.load();
