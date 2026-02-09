@@ -838,14 +838,14 @@ export default function Home() {
   return (
     <div className="h-screen w-screen bg-neutral-950 flex flex-row overflow-hidden">
       {/* Canvas Area */}
-      <div className="flex-1 min-w-0 relative flex items-center justify-center bg-neutral-950 p-8">
+      <div className="flex-1 min-w-0 relative flex items-center justify-center bg-neutral-900 p-8">
         <div
-          className="relative rounded-lg overflow-hidden shadow-2xl"
+          className="relative rounded-lg overflow-hidden shadow-2xl ring-1 ring-neutral-700"
           style={{
-            maxWidth: `${canvasWidth}px`,
-            maxHeight: `${canvasHeight}px`,
-            width: "100%",
+            width: `min(100%, ${canvasWidth}px)`,
+            height: `min(100%, ${canvasHeight}px)`,
             aspectRatio: `${canvasWidth} / ${canvasHeight}`,
+            objectFit: "contain",
           }}
         >
           {/* Composite canvas for recording */}
