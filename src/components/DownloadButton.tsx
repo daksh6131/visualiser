@@ -33,10 +33,6 @@ const resolutionMap: Record<Resolution, { width: number; height: number }> = {
   "4k": { width: 3840, height: 2160 },
 };
 
-// Dynamic import for FFmpeg
-let FFmpeg: any = null;
-let fetchFile: any = null;
-
 export const DownloadButton: React.FC<DownloadButtonProps> = ({ canvasRef }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [isConverting, setIsConverting] = useState(false);
@@ -62,26 +58,21 @@ export const DownloadButton: React.FC<DownloadButtonProps> = ({ canvasRef }) => 
     setStatusText("Loading MP4 encoder...");
 
     try {
-      const { FFmpeg: FFmpegClass } = await import("@ffmpeg/ffmpeg");
-      const { fetchFile: fetchFileFunc } = await import("@ffmpeg/util");
+      // Dynamic import for FFmpeg 0.11.x
+      const { createFFmpeg, fetchFile } = await import("@ffmpeg/ffmpeg");
 
-      FFmpeg = FFmpegClass;
-      fetchFile = fetchFileFunc;
-
-      const ffmpeg = new FFmpeg();
-
-      ffmpeg.on("progress", ({ progress: p }: { progress: number }) => {
-        setProgress(Math.round(50 + p * 50)); // 50-100% for conversion
+      const ffmpeg = createFFmpeg({
+        log: false,
+        progress: ({ ratio }: { ratio: number }) => {
+          setProgress(Math.round(50 + ratio * 50)); // 50-100% for conversion
+        },
+        // Use single-threaded core that doesn't require SharedArrayBuffer
+        corePath: "https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js",
       });
 
-      // Use single-threaded version - works without SharedArrayBuffer/COOP/COEP headers
-      // This is required for GitHub Pages and other static hosts that don't support custom headers
-      await ffmpeg.load({
-        coreURL: "https://unpkg.com/@ffmpeg/core-st@0.12.6/dist/esm/ffmpeg-core.js",
-        wasmURL: "https://unpkg.com/@ffmpeg/core-st@0.12.6/dist/esm/ffmpeg-core.wasm",
-      });
+      await ffmpeg.load();
 
-      ffmpegRef.current = ffmpeg;
+      ffmpegRef.current = { ffmpeg, fetchFile };
       setFfmpegLoaded(true);
       setStatusText("");
     } catch (error) {
@@ -105,35 +96,34 @@ export const DownloadButton: React.FC<DownloadButtonProps> = ({ canvasRef }) => 
       throw new Error("FFmpeg not loaded");
     }
 
-    const ffmpeg = ffmpegRef.current;
+    const { ffmpeg, fetchFile } = ffmpegRef.current;
     setStatusText("Converting to MP4 (high quality)...");
 
     // Write webm to FFmpeg virtual filesystem
-    const webmData = await fetchFile(webmBlob);
-    await ffmpeg.writeFile("input.webm", webmData);
+    ffmpeg.FS("writeFile", "input.webm", await fetchFile(webmBlob));
 
     // Re-encode to H.264 MP4 for maximum compatibility
     // Using "ultrafast" preset for reasonable browser performance
     // CRF 18-20 provides near-lossless quality
     const crf = targetResolution === "4k" ? "20" : "18";
 
-    await ffmpeg.exec([
+    await ffmpeg.run(
       "-i", "input.webm",
       "-c:v", "libx264",
-      "-preset", "ultrafast",     // Fast encoding for browser
-      "-crf", crf,                // High quality
-      "-pix_fmt", "yuv420p",      // Maximum compatibility
-      "-movflags", "+faststart",  // Web optimization
+      "-preset", "ultrafast",
+      "-crf", crf,
+      "-pix_fmt", "yuv420p",
+      "-movflags", "+faststart",
       "output.mp4"
-    ]);
+    );
 
     // Read the output
-    const mp4Data = await ffmpeg.readFile("output.mp4");
-    const mp4Blob = new Blob([mp4Data], { type: "video/mp4" });
+    const mp4Data = ffmpeg.FS("readFile", "output.mp4");
+    const mp4Blob = new Blob([mp4Data.buffer], { type: "video/mp4" });
 
     // Cleanup
-    await ffmpeg.deleteFile("input.webm");
-    await ffmpeg.deleteFile("output.mp4");
+    ffmpeg.FS("unlink", "input.webm");
+    ffmpeg.FS("unlink", "output.mp4");
 
     return mp4Blob;
   }, []);
