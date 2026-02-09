@@ -77,6 +77,8 @@ export const DownloadButton: React.FC<DownloadButtonProps> = ({ canvasRef }) => 
         },
         // Use single-threaded core that doesn't require SharedArrayBuffer
         corePath: "https://unpkg.com/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js",
+        // Required for single-threaded core - uses 'main' instead of 'proxy_main'
+        mainName: "main",
       });
 
       console.log("[FFmpeg] Loading WASM...");
