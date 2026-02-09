@@ -74,9 +74,11 @@ export const DownloadButton: React.FC<DownloadButtonProps> = ({ canvasRef }) => 
         setProgress(Math.round(50 + p * 50)); // 50-100% for conversion
       });
 
+      // Use single-threaded version - works without SharedArrayBuffer/COOP/COEP headers
+      // This is required for GitHub Pages and other static hosts that don't support custom headers
       await ffmpeg.load({
-        coreURL: "https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.js",
-        wasmURL: "https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.wasm",
+        coreURL: "https://unpkg.com/@ffmpeg/core-st@0.12.6/dist/esm/ffmpeg-core.js",
+        wasmURL: "https://unpkg.com/@ffmpeg/core-st@0.12.6/dist/esm/ffmpeg-core.wasm",
       });
 
       ffmpegRef.current = ffmpeg;
@@ -110,20 +112,18 @@ export const DownloadButton: React.FC<DownloadButtonProps> = ({ canvasRef }) => 
     const webmData = await fetchFile(webmBlob);
     await ffmpeg.writeFile("input.webm", webmData);
 
-    // CRF values: lower = better quality, higher = smaller file
-    // 18 is visually lossless, 23 is default, we use 18 for best quality
-    const crf = targetResolution === "4k" ? "16" : "18";
+    // Re-encode to H.264 MP4 for maximum compatibility
+    // Using "ultrafast" preset for reasonable browser performance
+    // CRF 18-20 provides near-lossless quality
+    const crf = targetResolution === "4k" ? "20" : "18";
 
-    // Convert to MP4 with H.264 codec - high quality settings
     await ffmpeg.exec([
       "-i", "input.webm",
       "-c:v", "libx264",
-      "-preset", "slow",        // Better compression, higher quality
-      "-crf", crf,              // High quality (lower = better)
-      "-profile:v", "high",     // H.264 High Profile
-      "-level", "4.2",          // Compatibility level
-      "-pix_fmt", "yuv420p",    // Standard pixel format
-      "-movflags", "+faststart", // Web optimization
+      "-preset", "ultrafast",     // Fast encoding for browser
+      "-crf", crf,                // High quality
+      "-pix_fmt", "yuv420p",      // Maximum compatibility
+      "-movflags", "+faststart",  // Web optimization
       "output.mp4"
     ]);
 
