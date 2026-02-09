@@ -235,7 +235,7 @@ const shaderPatterns = [
   { value: "plasma", label: "Plasma" },
   { value: "tunnel", label: "Tunnel" },
   { value: "fractal", label: "Fractal" },
-  { value: "moire", label: "Moiré" },
+  { value: "moire", label: "Moire" },
   { value: "waves", label: "Waves" },
 ];
 
@@ -256,11 +256,11 @@ const isometricColorModes = [
 ];
 
 type AnimationType = "wavefield" | "ascii" | "tunnel" | "shader" | "isometric";
+type SidebarPanel = "animation" | "advanced" | "text";
 
 export default function Home() {
   const [type, setType] = useState<AnimationType>("shader");
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [showTextPanel, setShowTextPanel] = useState(false);
+  const [activePanel, setActivePanel] = useState<SidebarPanel>("animation");
 
   // Canvas dimensions
   const [canvasWidth, setCanvasWidth] = useState(1920);
@@ -836,9 +836,9 @@ export default function Home() {
   };
 
   return (
-    <div className="h-screen w-screen bg-neutral-950 flex flex-col overflow-hidden">
-      {/* Video Player */}
-      <div className="flex-1 relative min-h-0 flex items-center justify-center bg-neutral-950">
+    <div className="h-screen w-screen bg-neutral-950 flex flex-row overflow-hidden">
+      {/* Canvas Area */}
+      <div className="flex-1 min-w-0 relative flex items-center justify-center bg-neutral-950 p-4">
         <div
           className="relative"
           style={{
@@ -982,316 +982,15 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Controls Panel */}
-      <div className="bg-neutral-900 border-t border-neutral-800">
-        {/* Main Controls */}
-        <div className="px-4 py-3 border-b border-neutral-800">
-          <div className="max-w-5xl mx-auto flex items-center gap-4 flex-wrap">
-            {/* Type Selector */}
-            <Tabs value={type} onValueChange={(v) => setType(v as AnimationType)}>
-              <TabsList className="bg-neutral-800 border border-neutral-700">
-                <TabsTrigger
-                  value="ascii"
-                  className="text-sm text-neutral-300 data-[state=active]:bg-neutral-700 data-[state=active]:text-white"
-                >
-                  ASCII
-                </TabsTrigger>
-                <TabsTrigger
-                  value="wavefield"
-                  className="text-sm text-neutral-300 data-[state=active]:bg-neutral-700 data-[state=active]:text-white"
-                >
-                  Wave
-                </TabsTrigger>
-                <TabsTrigger
-                  value="tunnel"
-                  className="text-sm text-neutral-300 data-[state=active]:bg-neutral-700 data-[state=active]:text-white"
-                >
-                  Tunnel
-                </TabsTrigger>
-                <TabsTrigger
-                  value="shader"
-                  className="text-sm text-neutral-300 data-[state=active]:bg-neutral-700 data-[state=active]:text-white"
-                >
-                  Shader
-                </TabsTrigger>
-                <TabsTrigger
-                  value="isometric"
-                  className="text-sm text-neutral-300 data-[state=active]:bg-neutral-700 data-[state=active]:text-white"
-                >
-                  Isometric
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-
-            <div className="h-6 w-px bg-neutral-700" />
-
-            {/* Pattern Select */}
-            <div className="flex items-center gap-2">
-              <Label className="text-sm text-neutral-400">Pattern</Label>
-              {type === "ascii" && (
-                <Select value={asciiPattern} onValueChange={setAsciiPattern}>
-                  <SelectTrigger className="w-32 h-9 text-sm bg-neutral-800 border-neutral-700 text-neutral-200">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-neutral-800 border-neutral-700">
-                    {asciiPatterns.map((p) => (
-                      <SelectItem key={p.value} value={p.value} className="text-sm text-neutral-200">
-                        {p.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-              {type === "wavefield" && (
-                <Select value={wavePattern} onValueChange={setWavePattern}>
-                  <SelectTrigger className="w-32 h-9 text-sm bg-neutral-800 border-neutral-700 text-neutral-200">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-neutral-800 border-neutral-700">
-                    {wavePatterns.map((p) => (
-                      <SelectItem key={p.value} value={p.value} className="text-sm text-neutral-200">
-                        {p.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-              {type === "tunnel" && (
-                <Select value={tunnelShape} onValueChange={setTunnelShape}>
-                  <SelectTrigger className="w-32 h-9 text-sm bg-neutral-800 border-neutral-700 text-neutral-200">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-neutral-800 border-neutral-700">
-                    {tunnelShapes.map((s) => (
-                      <SelectItem key={s.value} value={s.value} className="text-sm text-neutral-200">
-                        {s.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-              {type === "shader" && (
-                <Select value={shaderPattern} onValueChange={setShaderPattern}>
-                  <SelectTrigger className="w-32 h-9 text-sm bg-neutral-800 border-neutral-700 text-neutral-200">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-neutral-800 border-neutral-700">
-                    {shaderPatterns.map((s) => (
-                      <SelectItem key={s.value} value={s.value} className="text-sm text-neutral-200">
-                        {s.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-              {type === "isometric" && (
-                <Select value={isometricPattern} onValueChange={setIsometricPattern}>
-                  <SelectTrigger className="w-32 h-9 text-sm bg-neutral-800 border-neutral-700 text-neutral-200">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-neutral-800 border-neutral-700">
-                    {isometricPatterns.map((p) => (
-                      <SelectItem key={p.value} value={p.value} className="text-sm text-neutral-200">
-                        {p.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
-
-            <div className="h-6 w-px bg-neutral-700" />
-
-            {/* Primary Slider with Input */}
-            <div className="flex items-center gap-3 min-w-[220px]">
-              <Label className="text-sm text-neutral-400 w-12">
-                {type === "ascii" ? "Speed" : type === "wavefield" ? "Lines" : type === "tunnel" ? "Speed" : type === "isometric" ? "Grid" : "Speed"}
-              </Label>
-              {type === "ascii" && (
-                <>
-                  <Slider
-                    value={[asciiSpeed]}
-                    onValueChange={([v]) => setAsciiSpeed(v)}
-                    min={0.3}
-                    max={3}
-                    step={0.1}
-                    className="flex-1"
-                  />
-                  <Input
-                    type="number"
-                    value={asciiSpeed.toFixed(1)}
-                    onChange={(e) => {
-                      const v = parseFloat(e.target.value);
-                      if (!isNaN(v)) setAsciiSpeed(Math.min(3, Math.max(0.3, v)));
-                    }}
-                    min={0.3}
-                    max={3}
-                    step={0.1}
-                    className="h-7 w-16 text-xs text-right bg-neutral-800 border-neutral-700 text-neutral-200 px-2"
-                  />
-                </>
-              )}
-              {type === "wavefield" && (
-                <>
-                  <Slider
-                    value={[lineCount]}
-                    onValueChange={([v]) => setLineCount(v)}
-                    min={10}
-                    max={80}
-                    step={1}
-                    className="flex-1"
-                  />
-                  <Input
-                    type="number"
-                    value={lineCount}
-                    onChange={(e) => {
-                      const v = parseInt(e.target.value);
-                      if (!isNaN(v)) setLineCount(Math.min(80, Math.max(10, v)));
-                    }}
-                    min={10}
-                    max={80}
-                    step={1}
-                    className="h-7 w-16 text-xs text-right bg-neutral-800 border-neutral-700 text-neutral-200 px-2"
-                  />
-                </>
-              )}
-              {type === "tunnel" && (
-                <>
-                  <Slider
-                    value={[zoomSpeed]}
-                    onValueChange={([v]) => setZoomSpeed(v)}
-                    min={0.3}
-                    max={3}
-                    step={0.1}
-                    className="flex-1"
-                  />
-                  <Input
-                    type="number"
-                    value={zoomSpeed.toFixed(1)}
-                    onChange={(e) => {
-                      const v = parseFloat(e.target.value);
-                      if (!isNaN(v)) setZoomSpeed(Math.min(3, Math.max(0.3, v)));
-                    }}
-                    min={0.3}
-                    max={3}
-                    step={0.1}
-                    className="h-7 w-16 text-xs text-right bg-neutral-800 border-neutral-700 text-neutral-200 px-2"
-                  />
-                </>
-              )}
-              {type === "shader" && (
-                <>
-                  <Slider
-                    value={[shaderSpeed]}
-                    onValueChange={([v]) => setShaderSpeed(v)}
-                    min={0.1}
-                    max={3}
-                    step={0.1}
-                    className="flex-1"
-                  />
-                  <Input
-                    type="number"
-                    value={shaderSpeed.toFixed(1)}
-                    onChange={(e) => {
-                      const v = parseFloat(e.target.value);
-                      if (!isNaN(v)) setShaderSpeed(Math.min(3, Math.max(0.1, v)));
-                    }}
-                    min={0.1}
-                    max={3}
-                    step={0.1}
-                    className="h-7 w-16 text-xs text-right bg-neutral-800 border-neutral-700 text-neutral-200 px-2"
-                  />
-                </>
-              )}
-              {type === "isometric" && (
-                <>
-                  <Slider
-                    value={[isometricGridSize]}
-                    onValueChange={([v]) => setIsometricGridSize(v)}
-                    min={5}
-                    max={20}
-                    step={1}
-                    className="flex-1"
-                  />
-                  <Input
-                    type="number"
-                    value={isometricGridSize}
-                    onChange={(e) => {
-                      const v = parseInt(e.target.value);
-                      if (!isNaN(v)) setIsometricGridSize(Math.min(20, Math.max(5, v)));
-                    }}
-                    min={5}
-                    max={20}
-                    step={1}
-                    className="h-7 w-16 text-xs text-right bg-neutral-800 border-neutral-700 text-neutral-200 px-2"
-                  />
-                </>
-              )}
-            </div>
-
-            <div className="flex-1" />
-
-            {/* Action Buttons */}
-            {/* Canvas Size */}
-            <div className="flex items-center gap-2">
-              <Label className="text-sm text-neutral-400">Size</Label>
-              <Select value={aspectRatio} onValueChange={(v) => handleAspectRatioChange(v as any)}>
-                <SelectTrigger className="w-24 h-9 text-sm bg-neutral-800 border-neutral-700 text-neutral-200">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-neutral-800 border-neutral-700">
-                  <SelectItem value="16:9" className="text-sm text-neutral-200">16:9</SelectItem>
-                  <SelectItem value="9:16" className="text-sm text-neutral-200">9:16</SelectItem>
-                  <SelectItem value="1:1" className="text-sm text-neutral-200">1:1</SelectItem>
-                  <SelectItem value="4:3" className="text-sm text-neutral-200">4:3</SelectItem>
-                  <SelectItem value="custom" className="text-sm text-neutral-200">Custom</SelectItem>
-                </SelectContent>
-              </Select>
-              {aspectRatio === "custom" && (
-                <div className="flex items-center gap-1">
-                  <Input
-                    type="number"
-                    value={canvasWidth}
-                    onChange={(e) => setCanvasWidth(Math.max(100, parseInt(e.target.value) || 1920))}
-                    className="h-9 w-20 text-xs bg-neutral-800 border-neutral-700 text-neutral-200 px-2"
-                    placeholder="W"
-                  />
-                  <span className="text-neutral-500">×</span>
-                  <Input
-                    type="number"
-                    value={canvasHeight}
-                    onChange={(e) => setCanvasHeight(Math.max(100, parseInt(e.target.value) || 1080))}
-                    className="h-9 w-20 text-xs bg-neutral-800 border-neutral-700 text-neutral-200 px-2"
-                    placeholder="H"
-                  />
-                </div>
-              )}
-            </div>
-
-            <div className="h-6 w-px bg-neutral-700" />
-
-            <Button
-              onClick={() => setShowTextPanel(!showTextPanel)}
-              variant="outline"
-              size="sm"
-              className={`text-sm border-neutral-700 hover:bg-neutral-700 hover:text-white ${
-                showTextPanel ? "bg-neutral-700 text-white" : "bg-neutral-800 text-neutral-300"
-              }`}
-            >
-              Text
-            </Button>
-            <Button
-              onClick={() => setShowAdvanced(!showAdvanced)}
-              variant="outline"
-              size="sm"
-              className="text-sm bg-neutral-800 border-neutral-700 text-neutral-300 hover:bg-neutral-700 hover:text-white"
-            >
-              {showAdvanced ? "Hide" : "Advanced"}
-            </Button>
+      {/* Right Sidebar */}
+      <div className="w-80 shrink-0 h-full bg-neutral-900 border-l border-neutral-800 flex flex-col">
+        {/* Sidebar Header with Action Buttons */}
+        <div className="p-3 border-b border-neutral-800">
+          <div className="flex items-center gap-2">
             <Button
               onClick={randomize}
               size="sm"
-              className="text-sm bg-neutral-200 text-neutral-900 hover:bg-white"
+              className="flex-1 text-sm bg-neutral-200 text-neutral-900 hover:bg-white"
             >
               Randomize
             </Button>
@@ -1307,769 +1006,1006 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Advanced Controls */}
-        {showAdvanced && (
-          <div className="px-4 py-4 max-h-64 overflow-y-auto">
-            <div className="max-w-5xl mx-auto">
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                {/* Type-specific controls */}
+        {/* Tab Buttons */}
+        <div className="p-3 border-b border-neutral-800">
+          <div className="flex gap-1">
+            <Button
+              onClick={() => setActivePanel("animation")}
+              size="sm"
+              variant="outline"
+              className={`flex-1 text-xs ${
+                activePanel === "animation"
+                  ? "bg-neutral-700 text-white border-neutral-600"
+                  : "bg-neutral-800 text-neutral-400 border-neutral-700 hover:bg-neutral-700 hover:text-white"
+              }`}
+            >
+              Animation
+            </Button>
+            <Button
+              onClick={() => setActivePanel("advanced")}
+              size="sm"
+              variant="outline"
+              className={`flex-1 text-xs ${
+                activePanel === "advanced"
+                  ? "bg-neutral-700 text-white border-neutral-600"
+                  : "bg-neutral-800 text-neutral-400 border-neutral-700 hover:bg-neutral-700 hover:text-white"
+              }`}
+            >
+              Advanced
+            </Button>
+            <Button
+              onClick={() => setActivePanel("text")}
+              size="sm"
+              variant="outline"
+              className={`flex-1 text-xs ${
+                activePanel === "text"
+                  ? "bg-neutral-700 text-white border-neutral-600"
+                  : "bg-neutral-800 text-neutral-400 border-neutral-700 hover:bg-neutral-700 hover:text-white"
+              }`}
+            >
+              Text
+            </Button>
+          </div>
+        </div>
+
+        {/* Scrollable Content Area */}
+        <div className="flex-1 overflow-y-auto p-4">
+          {/* Animation Panel */}
+          {activePanel === "animation" && (
+            <div className="space-y-4">
+              {/* Type Selector */}
+              <div className="space-y-2">
+                <Label className="text-xs text-neutral-400">Type</Label>
+                <Tabs value={type} onValueChange={(v) => setType(v as AnimationType)} className="w-full">
+                  <TabsList className="w-full bg-neutral-800 border border-neutral-700 grid grid-cols-5">
+                    <TabsTrigger
+                      value="ascii"
+                      className="text-xs text-neutral-300 data-[state=active]:bg-neutral-700 data-[state=active]:text-white"
+                    >
+                      ASCII
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="wavefield"
+                      className="text-xs text-neutral-300 data-[state=active]:bg-neutral-700 data-[state=active]:text-white"
+                    >
+                      Wave
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="tunnel"
+                      className="text-xs text-neutral-300 data-[state=active]:bg-neutral-700 data-[state=active]:text-white"
+                    >
+                      Tunnel
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="shader"
+                      className="text-xs text-neutral-300 data-[state=active]:bg-neutral-700 data-[state=active]:text-white"
+                    >
+                      Shader
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="isometric"
+                      className="text-xs text-neutral-300 data-[state=active]:bg-neutral-700 data-[state=active]:text-white"
+                    >
+                      Iso
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
+
+              {/* Pattern Select */}
+              <div className="space-y-2">
+                <Label className="text-xs text-neutral-400">Pattern</Label>
                 {type === "ascii" && (
-                  <>
-                    <div className="space-y-2">
-                      <Label className="text-xs text-neutral-400">Characters</Label>
-                      <Select value={asciiCharacterSet} onValueChange={setAsciiCharacterSet}>
-                        <SelectTrigger className="h-8 text-xs bg-neutral-800 border-neutral-700 text-neutral-200">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="bg-neutral-800 border-neutral-700">
-                          {asciiCharacterSets.map((c) => (
-                            <SelectItem key={c.value} value={c.value} className="text-xs text-neutral-200">
-                              {c.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs text-neutral-400">Color Mode</Label>
-                      <Select value={asciiColorMode} onValueChange={setAsciiColorMode}>
-                        <SelectTrigger className="h-8 text-xs bg-neutral-800 border-neutral-700 text-neutral-200">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="bg-neutral-800 border-neutral-700">
-                          {asciiColorModes.map((m) => (
-                            <SelectItem key={m.value} value={m.value} className="text-xs text-neutral-200">
-                              {m.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <SliderWithInput
-                      label="Cell Size"
-                      value={asciiCellSize}
-                      onChange={setAsciiCellSize}
-                      min={4}
-                      max={32}
-                      step={1}
-                      decimals={0}
-                    />
-                    <SliderWithInput
-                      label="Density"
-                      value={asciiDensity}
-                      onChange={setAsciiDensity}
-                      min={0.5}
-                      max={2}
-                      step={0.1}
-                    />
-                    <SliderWithInput
-                      label="Contrast"
-                      value={asciiContrast}
-                      onChange={setAsciiContrast}
-                      min={0.5}
-                      max={2}
-                      step={0.1}
-                    />
-                    <SliderWithInput
-                      label="Brightness"
-                      value={asciiBrightness}
-                      onChange={setAsciiBrightness}
-                      min={-0.5}
-                      max={0.5}
-                      step={0.05}
-                      decimals={2}
-                    />
-                    {asciiColorMode === "single" && (
-                      <div className="space-y-2">
-                        <Label className="text-xs text-neutral-400">Color</Label>
-                        <Input
-                          type="color"
-                          value={asciiColor}
-                          onChange={(e) => setAsciiColor(e.target.value)}
-                          className="h-8 w-full p-1 bg-neutral-800 border-neutral-700"
-                        />
-                      </div>
-                    )}
-                    {/* Character & Font Settings */}
-                    <div className="col-span-2 md:col-span-4 lg:col-span-6 border-t border-neutral-700 pt-3 mt-2">
-                      <Label className="text-xs text-neutral-300 font-medium">Character Settings</Label>
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs text-neutral-400">Font</Label>
-                      <Select value={asciiFontFamily} onValueChange={setAsciiFontFamily}>
-                        <SelectTrigger className="h-8 text-xs bg-neutral-800 border-neutral-700 text-neutral-200">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="bg-neutral-800 border-neutral-700">
-                          {asciiFontFamilies.map((f) => (
-                            <SelectItem key={f.value} value={f.value} className="text-xs text-neutral-200">
-                              {f.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <SliderWithInput
-                      label="Spacing X"
-                      value={asciiCharSpacingX}
-                      onChange={setAsciiCharSpacingX}
-                      min={0.3}
-                      max={1.2}
-                      step={0.05}
-                      decimals={2}
-                    />
-                    <SliderWithInput
-                      label="Spacing Y"
-                      value={asciiCharSpacingY}
-                      onChange={setAsciiCharSpacingY}
-                      min={0.5}
-                      max={1.5}
-                      step={0.05}
-                      decimals={2}
-                    />
-                    <SliderWithInput
-                      label="BG Opacity"
-                      value={asciiBgOpacity}
-                      onChange={setAsciiBgOpacity}
-                      min={0}
-                      max={1}
-                      step={0.05}
-                      decimals={2}
-                    />
-                    {asciiCharacterSet === "custom" && (
-                      <div className="col-span-2 space-y-2">
-                        <Label className="text-xs text-neutral-400">Custom Characters</Label>
-                        <Input
-                          type="text"
-                          value={asciiCustomChars}
-                          onChange={(e) => setAsciiCustomChars(e.target.value)}
-                          placeholder="Enter characters..."
-                          className="h-8 text-xs bg-neutral-800 border-neutral-700 text-neutral-200"
-                        />
-                      </div>
-                    )}
-                    {/* Effects */}
-                    <div className="col-span-2 md:col-span-4 lg:col-span-6 border-t border-neutral-700 pt-3 mt-2">
-                      <Label className="text-xs text-neutral-300 font-medium">Effects</Label>
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs text-neutral-400">Glow</Label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={asciiGlowEffect}
-                          onChange={(e) => setAsciiGlowEffect(e.target.checked)}
-                          className="rounded border-neutral-700 h-4 w-4"
-                        />
-                      </div>
-                    </div>
-                    {asciiGlowEffect && (
-                      <SliderWithInput
-                        label="Glow Int."
-                        value={asciiGlowIntensity}
-                        onChange={setAsciiGlowIntensity}
-                        min={0.5}
-                        max={3}
-                        step={0.1}
-                      />
-                    )}
-                    <div className="space-y-2">
-                      <Label className="text-xs text-neutral-400">Scanlines</Label>
-                      <div className="flex items-center h-8">
-                        <input
-                          type="checkbox"
-                          checked={asciiScanlines}
-                          onChange={(e) => setAsciiScanlines(e.target.checked)}
-                          className="rounded border-neutral-700 h-4 w-4"
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs text-neutral-400">Chromatic</Label>
-                      <div className="flex items-center h-8">
-                        <input
-                          type="checkbox"
-                          checked={asciiChromatic}
-                          onChange={(e) => setAsciiChromatic(e.target.checked)}
-                          className="rounded border-neutral-700 h-4 w-4"
-                        />
-                      </div>
-                    </div>
-                    {/* 3D Rotation Controls - only for 3D patterns */}
-                    {(asciiPattern === "donut" || asciiPattern === "cube" || asciiPattern === "sphere") && (
-                      <>
-                        <div className="col-span-2 md:col-span-4 lg:col-span-6 border-t border-neutral-700 pt-3 mt-2">
-                          <div className="flex items-center gap-3 mb-3">
-                            <Label className="text-xs text-neutral-300 font-medium">3D Rotation</Label>
-                            <label className="flex items-center gap-1.5 text-xs text-neutral-400">
-                              <input
-                                type="checkbox"
-                                checked={autoRotate}
-                                onChange={(e) => setAutoRotate(e.target.checked)}
-                                className="rounded border-neutral-600"
-                              />
-                              Auto-rotate
-                            </label>
-                          </div>
-                        </div>
-                        <SliderWithInput
-                          label="Rotation X"
-                          value={rotationX}
-                          onChange={setRotationX}
-                          min={-180}
-                          max={180}
-                          step={1}
-                          decimals={0}
-                        />
-                        <SliderWithInput
-                          label="Rotation Y"
-                          value={rotationY}
-                          onChange={setRotationY}
-                          min={-180}
-                          max={180}
-                          step={1}
-                          decimals={0}
-                        />
-                        <SliderWithInput
-                          label="Rotation Z"
-                          value={rotationZ}
-                          onChange={setRotationZ}
-                          min={-180}
-                          max={180}
-                          step={1}
-                          decimals={0}
-                        />
-                        {autoRotate && (
-                          <>
-                            <SliderWithInput
-                              label="Speed X"
-                              value={autoRotateSpeedX}
-                              onChange={setAutoRotateSpeedX}
-                              min={0}
-                              max={3}
-                              step={0.1}
-                            />
-                            <SliderWithInput
-                              label="Speed Y"
-                              value={autoRotateSpeedY}
-                              onChange={setAutoRotateSpeedY}
-                              min={0}
-                              max={3}
-                              step={0.1}
-                            />
-                            <SliderWithInput
-                              label="Speed Z"
-                              value={autoRotateSpeedZ}
-                              onChange={setAutoRotateSpeedZ}
-                              min={0}
-                              max={3}
-                              step={0.1}
-                            />
-                          </>
-                        )}
-                      </>
-                    )}
-                    {/* Image-to-ASCII Controls */}
-                    {asciiPattern === "image" && (
-                      <>
-                        <div className="col-span-2 md:col-span-4 lg:col-span-6 border-t border-neutral-700 pt-3 mt-2">
-                          <Label className="text-xs text-neutral-300 font-medium">Image to ASCII</Label>
-                        </div>
-                        <div className="col-span-2 space-y-2">
-                          <Label className="text-xs text-neutral-400">Upload Image</Label>
-                          <div className="flex gap-2">
-                            <input
-                              ref={fileInputRef}
-                              type="file"
-                              accept="image/*"
-                              onChange={handleImageUpload}
-                              className="hidden"
-                            />
-                            <Button
-                              onClick={() => fileInputRef.current?.click()}
-                              size="sm"
-                              variant="outline"
-                              className="h-8 text-xs bg-neutral-800 border-neutral-700 text-neutral-300 hover:bg-neutral-700"
-                            >
-                              {asciiImageData ? "Change Image" : "Choose Image"}
-                            </Button>
-                            {asciiImageData && (
-                              <Button
-                                onClick={() => setAsciiImageData(undefined)}
-                                size="sm"
-                                variant="outline"
-                                className="h-8 text-xs bg-red-900/50 border-red-700 text-red-300 hover:bg-red-900"
-                              >
-                                Remove
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-xs text-neutral-400">Render Mode</Label>
-                          <Select value={asciiRenderMode} onValueChange={setAsciiRenderMode}>
-                            <SelectTrigger className="h-8 text-xs bg-neutral-800 border-neutral-700 text-neutral-200">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent className="bg-neutral-800 border-neutral-700">
-                              {asciiRenderModes.map((r) => (
-                                <SelectItem key={r.value} value={r.value} className="text-xs text-neutral-200">
-                                  {r.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-xs text-neutral-400">Invert</Label>
-                          <div className="flex items-center h-8">
-                            <input
-                              type="checkbox"
-                              checked={asciiImageInvert}
-                              onChange={(e) => setAsciiImageInvert(e.target.checked)}
-                              className="rounded border-neutral-700 h-4 w-4"
-                            />
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-xs text-neutral-400">Animate</Label>
-                          <div className="flex items-center h-8">
-                            <input
-                              type="checkbox"
-                              checked={asciiImageAnimate}
-                              onChange={(e) => setAsciiImageAnimate(e.target.checked)}
-                              className="rounded border-neutral-700 h-4 w-4"
-                            />
-                          </div>
-                        </div>
-                      </>
-                    )}
-                  </>
+                  <Select value={asciiPattern} onValueChange={setAsciiPattern}>
+                    <SelectTrigger className="w-full h-9 text-sm bg-neutral-800 border-neutral-700 text-neutral-200">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-neutral-800 border-neutral-700">
+                      {asciiPatterns.map((p) => (
+                        <SelectItem key={p.value} value={p.value} className="text-sm text-neutral-200">
+                          {p.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 )}
-
                 {type === "wavefield" && (
-                  <>
-                    <SliderWithInput
-                      label="Amplitude"
-                      value={waveAmplitude}
-                      onChange={setWaveAmplitude}
-                      min={10}
-                      max={150}
-                      step={5}
-                      decimals={0}
-                    />
-                    <SliderWithInput
-                      label="Frequency"
-                      value={waveFrequency}
-                      onChange={setWaveFrequency}
-                      min={0.5}
-                      max={8}
-                      step={0.5}
-                    />
-                    <SliderWithInput
-                      label="Speed"
-                      value={waveSpeed}
-                      onChange={setWaveSpeed}
-                      min={0.1}
-                      max={3}
-                      step={0.1}
-                    />
-                    <SliderWithInput
-                      label="Perspective"
-                      value={wavePerspective}
-                      onChange={setWavePerspective}
-                      min={0}
-                      max={1}
-                      step={0.05}
-                      decimals={2}
-                    />
-                    <div className="space-y-2">
-                      <Label className="text-xs text-neutral-400">Color Mode</Label>
-                      <Select value={waveColorMode} onValueChange={setWaveColorMode}>
-                        <SelectTrigger className="h-8 text-xs bg-neutral-800 border-neutral-700 text-neutral-200">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="bg-neutral-800 border-neutral-700">
-                          <SelectItem value="rainbow" className="text-xs text-neutral-200">Rainbow</SelectItem>
-                          <SelectItem value="single" className="text-xs text-neutral-200">Custom</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    {waveColorMode === "single" && (
-                      <div className="space-y-2">
-                        <Label className="text-xs text-neutral-400">Color</Label>
-                        <Input
-                          type="color"
-                          value={waveColor}
-                          onChange={(e) => setWaveColor(e.target.value)}
-                          className="h-8 w-full p-1 bg-neutral-800 border-neutral-700"
-                        />
-                      </div>
-                    )}
-                  </>
+                  <Select value={wavePattern} onValueChange={setWavePattern}>
+                    <SelectTrigger className="w-full h-9 text-sm bg-neutral-800 border-neutral-700 text-neutral-200">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-neutral-800 border-neutral-700">
+                      {wavePatterns.map((p) => (
+                        <SelectItem key={p.value} value={p.value} className="text-sm text-neutral-200">
+                          {p.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 )}
-
                 {type === "tunnel" && (
-                  <>
-                    <div className="space-y-2">
-                      <Label className="text-xs text-neutral-400">Type</Label>
-                      <Select value={tunnelPatternType} onValueChange={setTunnelPatternType}>
-                        <SelectTrigger className="h-8 text-xs bg-neutral-800 border-neutral-700 text-neutral-200">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="bg-neutral-800 border-neutral-700">
-                          {tunnelPatternTypes.map((t) => (
-                            <SelectItem key={t.value} value={t.value} className="text-xs text-neutral-200">
-                              {t.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs text-neutral-400">Direction</Label>
-                      <Select value={zoomDirection} onValueChange={setZoomDirection}>
-                        <SelectTrigger className="h-8 text-xs bg-neutral-800 border-neutral-700 text-neutral-200">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="bg-neutral-800 border-neutral-700">
-                          <SelectItem value="in" className="text-xs text-neutral-200">Zoom In</SelectItem>
-                          <SelectItem value="out" className="text-xs text-neutral-200">Zoom Out</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <SliderWithInput
-                      label="Layers"
-                      value={layerCount}
-                      onChange={setLayerCount}
-                      min={10}
-                      max={60}
-                      step={1}
-                      decimals={0}
-                    />
-                    <SliderWithInput
-                      label="Rotation"
-                      value={tunnelRotation}
-                      onChange={setTunnelRotation}
-                      min={0}
-                      max={1}
-                      step={0.05}
-                      decimals={2}
-                    />
-                    <SliderWithInput
-                      label="Glow"
-                      value={glowIntensity}
-                      onChange={setGlowIntensity}
-                      min={0.3}
-                      max={2}
-                      step={0.1}
-                    />
-                    <div className="space-y-2">
-                      <Label className="text-xs text-neutral-400">Enable Glow</Label>
-                      <div className="flex items-center h-8">
-                        <input
-                          type="checkbox"
-                          checked={enableGlow}
-                          onChange={(e) => setEnableGlow(e.target.checked)}
-                          className="rounded border-neutral-700 h-4 w-4"
-                        />
-                      </div>
-                    </div>
-                  </>
+                  <Select value={tunnelShape} onValueChange={setTunnelShape}>
+                    <SelectTrigger className="w-full h-9 text-sm bg-neutral-800 border-neutral-700 text-neutral-200">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-neutral-800 border-neutral-700">
+                      {tunnelShapes.map((s) => (
+                        <SelectItem key={s.value} value={s.value} className="text-sm text-neutral-200">
+                          {s.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 )}
-
                 {type === "shader" && (
-                  <>
-                    <SliderWithInput
-                      label="Complexity"
-                      value={shaderComplexity}
-                      onChange={setShaderComplexity}
-                      min={0.2}
-                      max={3}
-                      step={0.1}
-                    />
-                    <SliderWithInput
-                      label="Symmetry"
-                      value={shaderSymmetry}
-                      onChange={setShaderSymmetry}
-                      min={1}
-                      max={12}
-                      step={1}
-                      decimals={0}
-                    />
-                    <SliderWithInput
-                      label="Zoom"
-                      value={shaderZoom}
-                      onChange={setShaderZoom}
-                      min={0.2}
-                      max={4}
-                      step={0.1}
-                    />
-                    <SliderWithInput
-                      label="Rotation"
-                      value={shaderRotation}
-                      onChange={setShaderRotation}
-                      min={0}
-                      max={360}
-                      step={5}
-                      decimals={0}
-                    />
-                    <div className="space-y-2">
-                      <Label className="text-xs text-neutral-400">Color A</Label>
-                      <Input
-                        type="color"
-                        value={shaderColorA}
-                        onChange={(e) => setShaderColorA(e.target.value)}
-                        className="h-8 w-full p-1 bg-neutral-800 border-neutral-700"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs text-neutral-400">Color B</Label>
-                      <Input
-                        type="color"
-                        value={shaderColorB}
-                        onChange={(e) => setShaderColorB(e.target.value)}
-                        className="h-8 w-full p-1 bg-neutral-800 border-neutral-700"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs text-neutral-400">Color C</Label>
-                      <Input
-                        type="color"
-                        value={shaderColorC}
-                        onChange={(e) => setShaderColorC(e.target.value)}
-                        className="h-8 w-full p-1 bg-neutral-800 border-neutral-700"
-                      />
-                    </div>
-                  </>
+                  <Select value={shaderPattern} onValueChange={setShaderPattern}>
+                    <SelectTrigger className="w-full h-9 text-sm bg-neutral-800 border-neutral-700 text-neutral-200">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-neutral-800 border-neutral-700">
+                      {shaderPatterns.map((s) => (
+                        <SelectItem key={s.value} value={s.value} className="text-sm text-neutral-200">
+                          {s.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 )}
-
                 {type === "isometric" && (
-                  <>
-                    <SliderWithInput
-                      label="Cube Size"
-                      value={isometricCubeSize}
-                      onChange={setIsometricCubeSize}
-                      min={15}
-                      max={50}
-                      step={1}
-                      decimals={0}
-                    />
-                    <SliderWithInput
-                      label="Height"
-                      value={isometricHeightScale}
-                      onChange={setIsometricHeightScale}
-                      min={0.3}
-                      max={6}
-                      step={0.1}
-                    />
-                    <SliderWithInput
-                      label="Speed"
-                      value={isometricSpeed}
-                      onChange={setIsometricSpeed}
-                      min={0.1}
-                      max={5}
-                      step={0.1}
-                    />
-                    <SliderWithInput
-                      label="Noise Scale"
-                      value={isometricNoiseScale}
-                      onChange={setIsometricNoiseScale}
-                      min={0.5}
-                      max={5}
-                      step={0.1}
-                    />
-                    <div className="space-y-2">
-                      <Label className="text-xs text-neutral-400">Color Mode</Label>
-                      <Select value={isometricColorMode} onValueChange={setIsometricColorMode}>
-                        <SelectTrigger className="h-8 text-xs bg-neutral-800 border-neutral-700 text-neutral-200">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="bg-neutral-800 border-neutral-700">
-                          {isometricColorModes.map((m) => (
-                            <SelectItem key={m.value} value={m.value} className="text-xs text-neutral-200">
-                              {m.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs text-neutral-400">Base Color</Label>
-                      <Input
-                        type="color"
-                        value={isometricBaseColor}
-                        onChange={(e) => setIsometricBaseColor(e.target.value)}
-                        className="h-8 w-full p-1 bg-neutral-800 border-neutral-700"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs text-neutral-400">Stroke Color</Label>
-                      <Input
-                        type="color"
-                        value={isometricStrokeColor}
-                        onChange={(e) => setIsometricStrokeColor(e.target.value)}
-                        className="h-8 w-full p-1 bg-neutral-800 border-neutral-700"
-                      />
-                    </div>
-                    <SliderWithInput
-                      label="Stroke"
-                      value={isometricStrokeWidth}
-                      onChange={setIsometricStrokeWidth}
-                      min={0}
-                      max={3}
-                      step={0.5}
-                    />
-                    <SliderWithInput
-                      label="Top Shade"
-                      value={isometricTopShade}
-                      onChange={setIsometricTopShade}
-                      min={0.5}
-                      max={1.5}
-                      step={0.05}
-                      decimals={2}
-                    />
-                    <SliderWithInput
-                      label="Left Shade"
-                      value={isometricLeftShade}
-                      onChange={setIsometricLeftShade}
-                      min={0.3}
-                      max={1.2}
-                      step={0.05}
-                      decimals={2}
-                    />
-                    <SliderWithInput
-                      label="Right Shade"
-                      value={isometricRightShade}
-                      onChange={setIsometricRightShade}
-                      min={0.2}
-                      max={1}
-                      step={0.05}
-                      decimals={2}
-                    />
-                    <div className="space-y-2">
-                      <Label className="text-xs text-neutral-400">Glow</Label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={isometricEnableGlow}
-                          onChange={(e) => setIsometricEnableGlow(e.target.checked)}
-                          className="rounded border-neutral-700 h-4 w-4"
-                        />
-                      </div>
-                    </div>
-                    {isometricEnableGlow && (
-                      <SliderWithInput
-                        label="Glow Int."
-                        value={isometricGlowIntensity}
-                        onChange={setIsometricGlowIntensity}
-                        min={0.3}
-                        max={2}
-                        step={0.1}
-                      />
-                    )}
-                    <div className="col-span-2 md:col-span-4 lg:col-span-6 border-t border-neutral-700 pt-3 mt-2">
-                      <div className="flex items-center gap-3 mb-3">
-                        <Label className="text-xs text-neutral-300 font-medium">Rotation</Label>
-                        <label className="flex items-center gap-1.5 text-xs text-neutral-400">
-                          <input
-                            type="checkbox"
-                            checked={isometricAutoRotate}
-                            onChange={(e) => setIsometricAutoRotate(e.target.checked)}
-                            className="rounded border-neutral-600"
-                          />
-                          Auto-rotate
-                        </label>
-                      </div>
-                    </div>
-                    <SliderWithInput
-                      label="Rotation"
-                      value={isometricRotation}
-                      onChange={setIsometricRotation}
-                      min={0}
-                      max={360}
-                      step={5}
-                      decimals={0}
-                    />
-                    {isometricAutoRotate && (
-                      <SliderWithInput
-                        label="Rotate Speed"
-                        value={isometricAutoRotateSpeed}
-                        onChange={setIsometricAutoRotateSpeed}
-                        min={0.05}
-                        max={1}
-                        step={0.05}
-                        decimals={2}
-                      />
-                    )}
-                  </>
+                  <Select value={isometricPattern} onValueChange={setIsometricPattern}>
+                    <SelectTrigger className="w-full h-9 text-sm bg-neutral-800 border-neutral-700 text-neutral-200">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-neutral-800 border-neutral-700">
+                      {isometricPatterns.map((p) => (
+                        <SelectItem key={p.value} value={p.value} className="text-sm text-neutral-200">
+                          {p.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 )}
+              </div>
 
-                {/* Shared controls */}
+              {/* Primary Slider */}
+              {type === "ascii" && (
                 <SliderWithInput
-                  label="Hue Start"
-                  value={hueStart}
-                  onChange={setHueStart}
-                  min={0}
-                  max={360}
-                  step={5}
+                  label="Speed"
+                  value={asciiSpeed}
+                  onChange={setAsciiSpeed}
+                  min={0.3}
+                  max={3}
+                  step={0.1}
+                />
+              )}
+              {type === "wavefield" && (
+                <SliderWithInput
+                  label="Lines"
+                  value={lineCount}
+                  onChange={setLineCount}
+                  min={10}
+                  max={80}
+                  step={1}
                   decimals={0}
                 />
+              )}
+              {type === "tunnel" && (
                 <SliderWithInput
-                  label="Hue End"
-                  value={hueEnd}
-                  onChange={setHueEnd}
-                  min={0}
-                  max={360}
-                  step={5}
+                  label="Speed"
+                  value={zoomSpeed}
+                  onChange={setZoomSpeed}
+                  min={0.3}
+                  max={3}
+                  step={0.1}
+                />
+              )}
+              {type === "shader" && (
+                <SliderWithInput
+                  label="Speed"
+                  value={shaderSpeed}
+                  onChange={setShaderSpeed}
+                  min={0.1}
+                  max={3}
+                  step={0.1}
+                />
+              )}
+              {type === "isometric" && (
+                <SliderWithInput
+                  label="Grid Size"
+                  value={isometricGridSize}
+                  onChange={setIsometricGridSize}
+                  min={5}
+                  max={20}
+                  step={1}
                   decimals={0}
                 />
+              )}
 
-                <div className="space-y-2">
-                  <Label className="text-xs text-neutral-400">Effects</Label>
-                  <div className="flex items-center gap-3">
-                    <label className="flex items-center gap-1.5 text-xs text-neutral-300">
-                      <input
-                        type="checkbox"
-                        checked={enableNoise}
-                        onChange={(e) => setEnableNoise(e.target.checked)}
-                        className="rounded border-neutral-700"
-                      />
-                      Noise
-                    </label>
-                    <label className="flex items-center gap-1.5 text-xs text-neutral-300">
-                      <input
-                        type="checkbox"
-                        checked={enableVignette}
-                        onChange={(e) => setEnableVignette(e.target.checked)}
-                        className="rounded border-neutral-700"
-                      />
-                      Vignette
-                    </label>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs text-neutral-400">Seed</Label>
+              {/* Canvas Size */}
+              <div className="space-y-2 pt-2 border-t border-neutral-800">
+                <Label className="text-xs text-neutral-400">Canvas Size</Label>
+                <Select value={aspectRatio} onValueChange={(v) => handleAspectRatioChange(v as any)}>
+                  <SelectTrigger className="w-full h-9 text-sm bg-neutral-800 border-neutral-700 text-neutral-200">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-neutral-800 border-neutral-700">
+                    <SelectItem value="16:9" className="text-sm text-neutral-200">16:9</SelectItem>
+                    <SelectItem value="9:16" className="text-sm text-neutral-200">9:16</SelectItem>
+                    <SelectItem value="1:1" className="text-sm text-neutral-200">1:1</SelectItem>
+                    <SelectItem value="4:3" className="text-sm text-neutral-200">4:3</SelectItem>
+                    <SelectItem value="custom" className="text-sm text-neutral-200">Custom</SelectItem>
+                  </SelectContent>
+                </Select>
+                {aspectRatio === "custom" && (
+                  <div className="flex items-center gap-2">
                     <Input
                       type="number"
-                      value={seed}
-                      onChange={(e) => setSeed(parseInt(e.target.value) || 0)}
-                      className="h-6 w-20 text-xs text-right bg-neutral-800 border-neutral-700 text-neutral-200 px-2"
+                      value={canvasWidth}
+                      onChange={(e) => setCanvasWidth(Math.max(100, parseInt(e.target.value) || 1920))}
+                      className="h-9 flex-1 text-xs bg-neutral-800 border-neutral-700 text-neutral-200 px-2"
+                      placeholder="W"
+                    />
+                    <span className="text-neutral-500">x</span>
+                    <Input
+                      type="number"
+                      value={canvasHeight}
+                      onChange={(e) => setCanvasHeight(Math.max(100, parseInt(e.target.value) || 1080))}
+                      className="h-9 flex-1 text-xs bg-neutral-800 border-neutral-700 text-neutral-200 px-2"
+                      placeholder="H"
                     />
                   </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Advanced Panel */}
+          {activePanel === "advanced" && (
+            <div className="space-y-4">
+              {/* Type-specific controls */}
+              {type === "ascii" && (
+                <>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-neutral-400">Characters</Label>
+                    <Select value={asciiCharacterSet} onValueChange={setAsciiCharacterSet}>
+                      <SelectTrigger className="h-8 text-xs bg-neutral-800 border-neutral-700 text-neutral-200">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-neutral-800 border-neutral-700">
+                        {asciiCharacterSets.map((c) => (
+                          <SelectItem key={c.value} value={c.value} className="text-xs text-neutral-200">
+                            {c.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-neutral-400">Color Mode</Label>
+                    <Select value={asciiColorMode} onValueChange={setAsciiColorMode}>
+                      <SelectTrigger className="h-8 text-xs bg-neutral-800 border-neutral-700 text-neutral-200">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-neutral-800 border-neutral-700">
+                        {asciiColorModes.map((m) => (
+                          <SelectItem key={m.value} value={m.value} className="text-xs text-neutral-200">
+                            {m.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <SliderWithInput
+                    label="Cell Size"
+                    value={asciiCellSize}
+                    onChange={setAsciiCellSize}
+                    min={4}
+                    max={32}
+                    step={1}
+                    decimals={0}
+                  />
+                  <SliderWithInput
+                    label="Density"
+                    value={asciiDensity}
+                    onChange={setAsciiDensity}
+                    min={0.5}
+                    max={2}
+                    step={0.1}
+                  />
+                  <SliderWithInput
+                    label="Contrast"
+                    value={asciiContrast}
+                    onChange={setAsciiContrast}
+                    min={0.5}
+                    max={2}
+                    step={0.1}
+                  />
+                  <SliderWithInput
+                    label="Brightness"
+                    value={asciiBrightness}
+                    onChange={setAsciiBrightness}
+                    min={-0.5}
+                    max={0.5}
+                    step={0.05}
+                    decimals={2}
+                  />
+                  {asciiColorMode === "single" && (
+                    <div className="space-y-2">
+                      <Label className="text-xs text-neutral-400">Color</Label>
+                      <Input
+                        type="color"
+                        value={asciiColor}
+                        onChange={(e) => setAsciiColor(e.target.value)}
+                        className="h-8 w-full p-1 bg-neutral-800 border-neutral-700"
+                      />
+                    </div>
+                  )}
+                  {/* Character & Font Settings */}
+                  <div className="border-t border-neutral-700 pt-3 mt-2">
+                    <Label className="text-xs text-neutral-300 font-medium">Character Settings</Label>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-neutral-400">Font</Label>
+                    <Select value={asciiFontFamily} onValueChange={setAsciiFontFamily}>
+                      <SelectTrigger className="h-8 text-xs bg-neutral-800 border-neutral-700 text-neutral-200">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-neutral-800 border-neutral-700">
+                        {asciiFontFamilies.map((f) => (
+                          <SelectItem key={f.value} value={f.value} className="text-xs text-neutral-200">
+                            {f.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <SliderWithInput
+                    label="Spacing X"
+                    value={asciiCharSpacingX}
+                    onChange={setAsciiCharSpacingX}
+                    min={0.3}
+                    max={1.2}
+                    step={0.05}
+                    decimals={2}
+                  />
+                  <SliderWithInput
+                    label="Spacing Y"
+                    value={asciiCharSpacingY}
+                    onChange={setAsciiCharSpacingY}
+                    min={0.5}
+                    max={1.5}
+                    step={0.05}
+                    decimals={2}
+                  />
+                  <SliderWithInput
+                    label="BG Opacity"
+                    value={asciiBgOpacity}
+                    onChange={setAsciiBgOpacity}
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    decimals={2}
+                  />
+                  {asciiCharacterSet === "custom" && (
+                    <div className="space-y-2">
+                      <Label className="text-xs text-neutral-400">Custom Characters</Label>
+                      <Input
+                        type="text"
+                        value={asciiCustomChars}
+                        onChange={(e) => setAsciiCustomChars(e.target.value)}
+                        placeholder="Enter characters..."
+                        className="h-8 text-xs bg-neutral-800 border-neutral-700 text-neutral-200"
+                      />
+                    </div>
+                  )}
+                  {/* Effects */}
+                  <div className="border-t border-neutral-700 pt-3 mt-2">
+                    <Label className="text-xs text-neutral-300 font-medium">Effects</Label>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs text-neutral-400">Glow</Label>
+                    <input
+                      type="checkbox"
+                      checked={asciiGlowEffect}
+                      onChange={(e) => setAsciiGlowEffect(e.target.checked)}
+                      className="rounded border-neutral-700 h-4 w-4"
+                    />
+                  </div>
+                  {asciiGlowEffect && (
+                    <SliderWithInput
+                      label="Glow Intensity"
+                      value={asciiGlowIntensity}
+                      onChange={setAsciiGlowIntensity}
+                      min={0.5}
+                      max={3}
+                      step={0.1}
+                    />
+                  )}
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs text-neutral-400">Scanlines</Label>
+                    <input
+                      type="checkbox"
+                      checked={asciiScanlines}
+                      onChange={(e) => setAsciiScanlines(e.target.checked)}
+                      className="rounded border-neutral-700 h-4 w-4"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs text-neutral-400">Chromatic</Label>
+                    <input
+                      type="checkbox"
+                      checked={asciiChromatic}
+                      onChange={(e) => setAsciiChromatic(e.target.checked)}
+                      className="rounded border-neutral-700 h-4 w-4"
+                    />
+                  </div>
+                  {/* 3D Rotation Controls - only for 3D patterns */}
+                  {(asciiPattern === "donut" || asciiPattern === "cube" || asciiPattern === "sphere") && (
+                    <>
+                      <div className="border-t border-neutral-700 pt-3 mt-2">
+                        <div className="flex items-center justify-between mb-3">
+                          <Label className="text-xs text-neutral-300 font-medium">3D Rotation</Label>
+                          <label className="flex items-center gap-1.5 text-xs text-neutral-400">
+                            <input
+                              type="checkbox"
+                              checked={autoRotate}
+                              onChange={(e) => setAutoRotate(e.target.checked)}
+                              className="rounded border-neutral-600"
+                            />
+                            Auto
+                          </label>
+                        </div>
+                      </div>
+                      <SliderWithInput
+                        label="Rotation X"
+                        value={rotationX}
+                        onChange={setRotationX}
+                        min={-180}
+                        max={180}
+                        step={1}
+                        decimals={0}
+                      />
+                      <SliderWithInput
+                        label="Rotation Y"
+                        value={rotationY}
+                        onChange={setRotationY}
+                        min={-180}
+                        max={180}
+                        step={1}
+                        decimals={0}
+                      />
+                      <SliderWithInput
+                        label="Rotation Z"
+                        value={rotationZ}
+                        onChange={setRotationZ}
+                        min={-180}
+                        max={180}
+                        step={1}
+                        decimals={0}
+                      />
+                      {autoRotate && (
+                        <>
+                          <SliderWithInput
+                            label="Speed X"
+                            value={autoRotateSpeedX}
+                            onChange={setAutoRotateSpeedX}
+                            min={0}
+                            max={3}
+                            step={0.1}
+                          />
+                          <SliderWithInput
+                            label="Speed Y"
+                            value={autoRotateSpeedY}
+                            onChange={setAutoRotateSpeedY}
+                            min={0}
+                            max={3}
+                            step={0.1}
+                          />
+                          <SliderWithInput
+                            label="Speed Z"
+                            value={autoRotateSpeedZ}
+                            onChange={setAutoRotateSpeedZ}
+                            min={0}
+                            max={3}
+                            step={0.1}
+                          />
+                        </>
+                      )}
+                    </>
+                  )}
+                  {/* Image-to-ASCII Controls */}
+                  {asciiPattern === "image" && (
+                    <>
+                      <div className="border-t border-neutral-700 pt-3 mt-2">
+                        <Label className="text-xs text-neutral-300 font-medium">Image to ASCII</Label>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs text-neutral-400">Upload Image</Label>
+                        <div className="flex gap-2">
+                          <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept="image/*"
+                            onChange={handleImageUpload}
+                            className="hidden"
+                          />
+                          <Button
+                            onClick={() => fileInputRef.current?.click()}
+                            size="sm"
+                            variant="outline"
+                            className="flex-1 h-8 text-xs bg-neutral-800 border-neutral-700 text-neutral-300 hover:bg-neutral-700"
+                          >
+                            {asciiImageData ? "Change" : "Choose"}
+                          </Button>
+                          {asciiImageData && (
+                            <Button
+                              onClick={() => setAsciiImageData(undefined)}
+                              size="sm"
+                              variant="outline"
+                              className="h-8 text-xs bg-red-900/50 border-red-700 text-red-300 hover:bg-red-900"
+                            >
+                              Remove
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs text-neutral-400">Render Mode</Label>
+                        <Select value={asciiRenderMode} onValueChange={setAsciiRenderMode}>
+                          <SelectTrigger className="h-8 text-xs bg-neutral-800 border-neutral-700 text-neutral-200">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="bg-neutral-800 border-neutral-700">
+                            {asciiRenderModes.map((r) => (
+                              <SelectItem key={r.value} value={r.value} className="text-xs text-neutral-200">
+                                {r.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs text-neutral-400">Invert</Label>
+                        <input
+                          type="checkbox"
+                          checked={asciiImageInvert}
+                          onChange={(e) => setAsciiImageInvert(e.target.checked)}
+                          className="rounded border-neutral-700 h-4 w-4"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs text-neutral-400">Animate</Label>
+                        <input
+                          type="checkbox"
+                          checked={asciiImageAnimate}
+                          onChange={(e) => setAsciiImageAnimate(e.target.checked)}
+                          className="rounded border-neutral-700 h-4 w-4"
+                        />
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
+
+              {type === "wavefield" && (
+                <>
+                  <SliderWithInput
+                    label="Amplitude"
+                    value={waveAmplitude}
+                    onChange={setWaveAmplitude}
+                    min={10}
+                    max={150}
+                    step={5}
+                    decimals={0}
+                  />
+                  <SliderWithInput
+                    label="Frequency"
+                    value={waveFrequency}
+                    onChange={setWaveFrequency}
+                    min={0.5}
+                    max={8}
+                    step={0.5}
+                  />
+                  <SliderWithInput
+                    label="Speed"
+                    value={waveSpeed}
+                    onChange={setWaveSpeed}
+                    min={0.1}
+                    max={3}
+                    step={0.1}
+                  />
+                  <SliderWithInput
+                    label="Perspective"
+                    value={wavePerspective}
+                    onChange={setWavePerspective}
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    decimals={2}
+                  />
+                  <div className="space-y-2">
+                    <Label className="text-xs text-neutral-400">Color Mode</Label>
+                    <Select value={waveColorMode} onValueChange={setWaveColorMode}>
+                      <SelectTrigger className="h-8 text-xs bg-neutral-800 border-neutral-700 text-neutral-200">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-neutral-800 border-neutral-700">
+                        <SelectItem value="rainbow" className="text-xs text-neutral-200">Rainbow</SelectItem>
+                        <SelectItem value="single" className="text-xs text-neutral-200">Custom</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {waveColorMode === "single" && (
+                    <div className="space-y-2">
+                      <Label className="text-xs text-neutral-400">Color</Label>
+                      <Input
+                        type="color"
+                        value={waveColor}
+                        onChange={(e) => setWaveColor(e.target.value)}
+                        className="h-8 w-full p-1 bg-neutral-800 border-neutral-700"
+                      />
+                    </div>
+                  )}
+                </>
+              )}
+
+              {type === "tunnel" && (
+                <>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-neutral-400">Type</Label>
+                    <Select value={tunnelPatternType} onValueChange={setTunnelPatternType}>
+                      <SelectTrigger className="h-8 text-xs bg-neutral-800 border-neutral-700 text-neutral-200">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-neutral-800 border-neutral-700">
+                        {tunnelPatternTypes.map((t) => (
+                          <SelectItem key={t.value} value={t.value} className="text-xs text-neutral-200">
+                            {t.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-neutral-400">Direction</Label>
+                    <Select value={zoomDirection} onValueChange={setZoomDirection}>
+                      <SelectTrigger className="h-8 text-xs bg-neutral-800 border-neutral-700 text-neutral-200">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-neutral-800 border-neutral-700">
+                        <SelectItem value="in" className="text-xs text-neutral-200">Zoom In</SelectItem>
+                        <SelectItem value="out" className="text-xs text-neutral-200">Zoom Out</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <SliderWithInput
+                    label="Layers"
+                    value={layerCount}
+                    onChange={setLayerCount}
+                    min={10}
+                    max={60}
+                    step={1}
+                    decimals={0}
+                  />
+                  <SliderWithInput
+                    label="Rotation"
+                    value={tunnelRotation}
+                    onChange={setTunnelRotation}
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    decimals={2}
+                  />
+                  <SliderWithInput
+                    label="Glow"
+                    value={glowIntensity}
+                    onChange={setGlowIntensity}
+                    min={0.3}
+                    max={2}
+                    step={0.1}
+                  />
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs text-neutral-400">Enable Glow</Label>
+                    <input
+                      type="checkbox"
+                      checked={enableGlow}
+                      onChange={(e) => setEnableGlow(e.target.checked)}
+                      className="rounded border-neutral-700 h-4 w-4"
+                    />
+                  </div>
+                </>
+              )}
+
+              {type === "shader" && (
+                <>
+                  <SliderWithInput
+                    label="Complexity"
+                    value={shaderComplexity}
+                    onChange={setShaderComplexity}
+                    min={0.2}
+                    max={3}
+                    step={0.1}
+                  />
+                  <SliderWithInput
+                    label="Symmetry"
+                    value={shaderSymmetry}
+                    onChange={setShaderSymmetry}
+                    min={1}
+                    max={12}
+                    step={1}
+                    decimals={0}
+                  />
+                  <SliderWithInput
+                    label="Zoom"
+                    value={shaderZoom}
+                    onChange={setShaderZoom}
+                    min={0.2}
+                    max={4}
+                    step={0.1}
+                  />
+                  <SliderWithInput
+                    label="Rotation"
+                    value={shaderRotation}
+                    onChange={setShaderRotation}
+                    min={0}
+                    max={360}
+                    step={5}
+                    decimals={0}
+                  />
+                  <div className="space-y-2">
+                    <Label className="text-xs text-neutral-400">Color A</Label>
+                    <Input
+                      type="color"
+                      value={shaderColorA}
+                      onChange={(e) => setShaderColorA(e.target.value)}
+                      className="h-8 w-full p-1 bg-neutral-800 border-neutral-700"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-neutral-400">Color B</Label>
+                    <Input
+                      type="color"
+                      value={shaderColorB}
+                      onChange={(e) => setShaderColorB(e.target.value)}
+                      className="h-8 w-full p-1 bg-neutral-800 border-neutral-700"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-neutral-400">Color C</Label>
+                    <Input
+                      type="color"
+                      value={shaderColorC}
+                      onChange={(e) => setShaderColorC(e.target.value)}
+                      className="h-8 w-full p-1 bg-neutral-800 border-neutral-700"
+                    />
+                  </div>
+                </>
+              )}
+
+              {type === "isometric" && (
+                <>
+                  <SliderWithInput
+                    label="Cube Size"
+                    value={isometricCubeSize}
+                    onChange={setIsometricCubeSize}
+                    min={15}
+                    max={50}
+                    step={1}
+                    decimals={0}
+                  />
+                  <SliderWithInput
+                    label="Height"
+                    value={isometricHeightScale}
+                    onChange={setIsometricHeightScale}
+                    min={0.3}
+                    max={6}
+                    step={0.1}
+                  />
+                  <SliderWithInput
+                    label="Speed"
+                    value={isometricSpeed}
+                    onChange={setIsometricSpeed}
+                    min={0.1}
+                    max={5}
+                    step={0.1}
+                  />
+                  <SliderWithInput
+                    label="Noise Scale"
+                    value={isometricNoiseScale}
+                    onChange={setIsometricNoiseScale}
+                    min={0.5}
+                    max={5}
+                    step={0.1}
+                  />
+                  <div className="space-y-2">
+                    <Label className="text-xs text-neutral-400">Color Mode</Label>
+                    <Select value={isometricColorMode} onValueChange={setIsometricColorMode}>
+                      <SelectTrigger className="h-8 text-xs bg-neutral-800 border-neutral-700 text-neutral-200">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-neutral-800 border-neutral-700">
+                        {isometricColorModes.map((m) => (
+                          <SelectItem key={m.value} value={m.value} className="text-xs text-neutral-200">
+                            {m.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-neutral-400">Base Color</Label>
+                    <Input
+                      type="color"
+                      value={isometricBaseColor}
+                      onChange={(e) => setIsometricBaseColor(e.target.value)}
+                      className="h-8 w-full p-1 bg-neutral-800 border-neutral-700"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-neutral-400">Stroke Color</Label>
+                    <Input
+                      type="color"
+                      value={isometricStrokeColor}
+                      onChange={(e) => setIsometricStrokeColor(e.target.value)}
+                      className="h-8 w-full p-1 bg-neutral-800 border-neutral-700"
+                    />
+                  </div>
+                  <SliderWithInput
+                    label="Stroke"
+                    value={isometricStrokeWidth}
+                    onChange={setIsometricStrokeWidth}
+                    min={0}
+                    max={3}
+                    step={0.5}
+                  />
+                  <SliderWithInput
+                    label="Top Shade"
+                    value={isometricTopShade}
+                    onChange={setIsometricTopShade}
+                    min={0.5}
+                    max={1.5}
+                    step={0.05}
+                    decimals={2}
+                  />
+                  <SliderWithInput
+                    label="Left Shade"
+                    value={isometricLeftShade}
+                    onChange={setIsometricLeftShade}
+                    min={0.3}
+                    max={1.2}
+                    step={0.05}
+                    decimals={2}
+                  />
+                  <SliderWithInput
+                    label="Right Shade"
+                    value={isometricRightShade}
+                    onChange={setIsometricRightShade}
+                    min={0.2}
+                    max={1}
+                    step={0.05}
+                    decimals={2}
+                  />
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs text-neutral-400">Glow</Label>
+                    <input
+                      type="checkbox"
+                      checked={isometricEnableGlow}
+                      onChange={(e) => setIsometricEnableGlow(e.target.checked)}
+                      className="rounded border-neutral-700 h-4 w-4"
+                    />
+                  </div>
+                  {isometricEnableGlow && (
+                    <SliderWithInput
+                      label="Glow Intensity"
+                      value={isometricGlowIntensity}
+                      onChange={setIsometricGlowIntensity}
+                      min={0.3}
+                      max={2}
+                      step={0.1}
+                    />
+                  )}
+                  <div className="border-t border-neutral-700 pt-3 mt-2">
+                    <div className="flex items-center justify-between mb-3">
+                      <Label className="text-xs text-neutral-300 font-medium">Rotation</Label>
+                      <label className="flex items-center gap-1.5 text-xs text-neutral-400">
+                        <input
+                          type="checkbox"
+                          checked={isometricAutoRotate}
+                          onChange={(e) => setIsometricAutoRotate(e.target.checked)}
+                          className="rounded border-neutral-600"
+                        />
+                        Auto
+                      </label>
+                    </div>
+                  </div>
+                  <SliderWithInput
+                    label="Rotation"
+                    value={isometricRotation}
+                    onChange={setIsometricRotation}
+                    min={0}
+                    max={360}
+                    step={5}
+                    decimals={0}
+                  />
+                  {isometricAutoRotate && (
+                    <SliderWithInput
+                      label="Rotate Speed"
+                      value={isometricAutoRotateSpeed}
+                      onChange={setIsometricAutoRotateSpeed}
+                      min={0.05}
+                      max={1}
+                      step={0.05}
+                      decimals={2}
+                    />
+                  )}
+                </>
+              )}
+
+              {/* Shared controls */}
+              <div className="border-t border-neutral-700 pt-3 mt-2">
+                <Label className="text-xs text-neutral-300 font-medium">Color Settings</Label>
+              </div>
+              <SliderWithInput
+                label="Hue Start"
+                value={hueStart}
+                onChange={setHueStart}
+                min={0}
+                max={360}
+                step={5}
+                decimals={0}
+              />
+              <SliderWithInput
+                label="Hue End"
+                value={hueEnd}
+                onChange={setHueEnd}
+                min={0}
+                max={360}
+                step={5}
+                decimals={0}
+              />
+
+              <div className="space-y-2">
+                <Label className="text-xs text-neutral-400">Effects</Label>
+                <div className="flex flex-col gap-2">
+                  <label className="flex items-center gap-2 text-xs text-neutral-300">
+                    <input
+                      type="checkbox"
+                      checked={enableNoise}
+                      onChange={(e) => setEnableNoise(e.target.checked)}
+                      className="rounded border-neutral-700"
+                    />
+                    Noise
+                  </label>
+                  <label className="flex items-center gap-2 text-xs text-neutral-300">
+                    <input
+                      type="checkbox"
+                      checked={enableVignette}
+                      onChange={(e) => setEnableVignette(e.target.checked)}
+                      className="rounded border-neutral-700"
+                    />
+                    Vignette
+                  </label>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs text-neutral-400">Seed</Label>
+                  <Input
+                    type="number"
+                    value={seed}
+                    onChange={(e) => setSeed(parseInt(e.target.value) || 0)}
+                    className="h-6 w-20 text-xs text-right bg-neutral-800 border-neutral-700 text-neutral-200 px-2"
+                  />
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Text Panel */}
-        {showTextPanel && (
-          <div className="px-4 py-4 border-t border-neutral-800 max-h-72 overflow-y-auto">
-            <div className="max-w-5xl mx-auto">
-              <div className="flex items-center justify-between mb-4">
+          {/* Text Panel */}
+          {activePanel === "text" && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
                 <Label className="text-sm text-neutral-300 font-medium">Text Overlays</Label>
                 <Button
                   onClick={addTextItem}
@@ -2085,9 +2021,9 @@ export default function Home() {
                   No text overlays yet. Click &quot;Add Text&quot; to create one.
                 </p>
               ) : (
-                <div className="flex gap-4">
+                <div className="space-y-4">
                   {/* Text list */}
-                  <div className="w-48 space-y-2">
+                  <div className="space-y-2">
                     {textItems.map((item) => (
                       <div
                         key={item.id}
@@ -2105,9 +2041,9 @@ export default function Home() {
 
                   {/* Text editor */}
                   {selectedTextItem && (
-                    <div className="flex-1 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                    <div className="space-y-4 border-t border-neutral-700 pt-4">
                       {/* Text content */}
-                      <div className="col-span-2 space-y-2">
+                      <div className="space-y-2">
                         <Label className="text-xs text-neutral-400">Text</Label>
                         <Input
                           value={selectedTextItem.text}
@@ -2234,16 +2170,14 @@ export default function Home() {
                       </div>
 
                       {/* Shadow toggle */}
-                      <div className="space-y-2">
+                      <div className="flex items-center justify-between">
                         <Label className="text-xs text-neutral-400">Shadow</Label>
-                        <div className="flex items-center h-8">
-                          <input
-                            type="checkbox"
-                            checked={selectedTextItem.shadow}
-                            onChange={(e) => updateTextItem(selectedTextItem.id, { shadow: e.target.checked })}
-                            className="rounded border-neutral-700 h-4 w-4"
-                          />
-                        </div>
+                        <input
+                          type="checkbox"
+                          checked={selectedTextItem.shadow}
+                          onChange={(e) => updateTextItem(selectedTextItem.id, { shadow: e.target.checked })}
+                          className="rounded border-neutral-700 h-4 w-4"
+                        />
                       </div>
 
                       {selectedTextItem.shadow && (
@@ -2270,16 +2204,14 @@ export default function Home() {
                       )}
 
                       {/* Stroke toggle */}
-                      <div className="space-y-2">
+                      <div className="flex items-center justify-between">
                         <Label className="text-xs text-neutral-400">Stroke</Label>
-                        <div className="flex items-center h-8">
-                          <input
-                            type="checkbox"
-                            checked={selectedTextItem.stroke}
-                            onChange={(e) => updateTextItem(selectedTextItem.id, { stroke: e.target.checked })}
-                            className="rounded border-neutral-700 h-4 w-4"
-                          />
-                        </div>
+                        <input
+                          type="checkbox"
+                          checked={selectedTextItem.stroke}
+                          onChange={(e) => updateTextItem(selectedTextItem.id, { stroke: e.target.checked })}
+                          className="rounded border-neutral-700 h-4 w-4"
+                        />
                       </div>
 
                       {selectedTextItem.stroke && (
@@ -2305,20 +2237,18 @@ export default function Home() {
                       )}
 
                       {/* Animation */}
-                      <div className="col-span-2 md:col-span-4 lg:col-span-6 border-t border-neutral-700 pt-3 mt-2">
+                      <div className="border-t border-neutral-700 pt-3 mt-2">
                         <Label className="text-xs text-neutral-300 font-medium">Animation</Label>
                       </div>
 
-                      <div className="space-y-2">
+                      <div className="flex items-center justify-between">
                         <Label className="text-xs text-neutral-400">Animate</Label>
-                        <div className="flex items-center h-8">
-                          <input
-                            type="checkbox"
-                            checked={selectedTextItem.animate}
-                            onChange={(e) => updateTextItem(selectedTextItem.id, { animate: e.target.checked })}
-                            className="rounded border-neutral-700 h-4 w-4"
-                          />
-                        </div>
+                        <input
+                          type="checkbox"
+                          checked={selectedTextItem.animate}
+                          onChange={(e) => updateTextItem(selectedTextItem.id, { animate: e.target.checked })}
+                          className="rounded border-neutral-700 h-4 w-4"
+                        />
                       </div>
 
                       {selectedTextItem.animate && (
@@ -2355,12 +2285,12 @@ export default function Home() {
                       )}
 
                       {/* Actions */}
-                      <div className="col-span-2 md:col-span-4 lg:col-span-6 flex gap-2 mt-2">
+                      <div className="flex gap-2 mt-2">
                         <Button
                           onClick={() => duplicateTextItem(selectedTextItem.id)}
                           size="sm"
                           variant="outline"
-                          className="text-xs bg-neutral-800 border-neutral-700 text-neutral-300 hover:bg-neutral-700"
+                          className="flex-1 text-xs bg-neutral-800 border-neutral-700 text-neutral-300 hover:bg-neutral-700"
                         >
                           Duplicate
                         </Button>
@@ -2368,7 +2298,7 @@ export default function Home() {
                           onClick={() => deleteTextItem(selectedTextItem.id)}
                           size="sm"
                           variant="outline"
-                          className="text-xs bg-red-900/50 border-red-700 text-red-300 hover:bg-red-900"
+                          className="flex-1 text-xs bg-red-900/50 border-red-700 text-red-300 hover:bg-red-900"
                         >
                           Delete
                         </Button>
@@ -2378,8 +2308,8 @@ export default function Home() {
                 </div>
               )}
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

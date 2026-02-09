@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -24,151 +24,36 @@ interface DownloadButtonProps {
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
 }
 
-type VideoFormat = "webm" | "mp4";
-type Resolution = "720p" | "1080p" | "4k";
+type VideoFormat = "webm" | "gif";
+type Quality = "standard" | "high" | "maximum";
 
-const resolutionMap: Record<Resolution, { width: number; height: number }> = {
-  "720p": { width: 1280, height: 720 },
-  "1080p": { width: 1920, height: 1080 },
-  "4k": { width: 3840, height: 2160 },
+const qualitySettings: Record<Quality, { bitrate: number; label: string }> = {
+  standard: { bitrate: 8000000, label: "Standard (8 Mbps)" },
+  high: { bitrate: 16000000, label: "High (16 Mbps)" },
+  maximum: { bitrate: 32000000, label: "Maximum (32 Mbps)" },
 };
 
 export const DownloadButton: React.FC<DownloadButtonProps> = ({ canvasRef }) => {
   const [isRecording, setIsRecording] = useState(false);
-  const [isConverting, setIsConverting] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [statusText, setStatusText] = useState("");
-  const [format, setFormat] = useState<VideoFormat>("mp4");
-  const [resolution, setResolution] = useState<Resolution>("1080p");
+  const [format, setFormat] = useState<VideoFormat>("webm");
+  const [quality, setQuality] = useState<Quality>("high");
   const [duration, setDuration] = useState(5);
   const [fps, setFps] = useState(30);
   const [isOpen, setIsOpen] = useState(false);
-  const [ffmpegLoaded, setFfmpegLoaded] = useState(false);
-  const [ffmpegLoading, setFfmpegLoading] = useState(false);
-  const [ffmpegError, setFfmpegError] = useState<string | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
-  const ffmpegRef = useRef<any>(null);
-  const loadAttemptedRef = useRef(false);
+  const framesRef = useRef<string[]>([]);
 
-  // Load FFmpeg when MP4 is selected
-  const loadFFmpeg = useCallback(async () => {
-    // Prevent multiple load attempts
-    if (ffmpegLoaded || ffmpegLoading || loadAttemptedRef.current) return;
-    loadAttemptedRef.current = true;
-
-    setFfmpegLoading(true);
-    setFfmpegError(null);
-    setStatusText("Loading MP4 encoder...");
-
-    try {
-      console.log("[FFmpeg] Starting load...");
-
-      // Dynamic import for FFmpeg 0.11.x
-      const { createFFmpeg, fetchFile } = await import("@ffmpeg/ffmpeg");
-      console.log("[FFmpeg] Module imported");
-
-      const ffmpeg = createFFmpeg({
-        log: true, // Enable logging for debugging
-        progress: ({ ratio }: { ratio: number }) => {
-          console.log("[FFmpeg] Progress:", ratio);
-          setProgress(Math.round(50 + ratio * 50));
-        },
-        // Use single-threaded core that doesn't require SharedArrayBuffer
-        corePath: "https://unpkg.com/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js",
-        // Required for single-threaded core - uses 'main' instead of 'proxy_main'
-        mainName: "main",
-      });
-
-      console.log("[FFmpeg] Loading WASM...");
-      await ffmpeg.load();
-      console.log("[FFmpeg] WASM loaded successfully!");
-
-      ffmpegRef.current = { ffmpeg, fetchFile };
-      setFfmpegLoaded(true);
-      setStatusText("");
-    } catch (error) {
-      console.error("[FFmpeg] Failed to load:", error);
-      const errorMsg = error instanceof Error ? error.message : "Unknown error";
-      setFfmpegError(errorMsg);
-      setStatusText(`Failed: ${errorMsg}`);
-      // Don't auto-switch to webm - let user decide
-    } finally {
-      setFfmpegLoading(false);
-    }
-  }, [ffmpegLoaded, ffmpegLoading]);
-
-  // Load FFmpeg when dialog opens with MP4 selected
-  useEffect(() => {
-    if (isOpen && format === "mp4" && !ffmpegLoaded && !ffmpegLoading && !loadAttemptedRef.current) {
-      loadFFmpeg();
-    }
-  }, [isOpen, format, ffmpegLoaded, ffmpegLoading, loadFFmpeg]);
-
-  const convertToMp4 = useCallback(async (webmBlob: Blob, targetResolution: Resolution): Promise<Blob> => {
-    if (!ffmpegRef.current) {
-      throw new Error("FFmpeg not loaded");
-    }
-
-    const { ffmpeg, fetchFile } = ffmpegRef.current;
-    setStatusText("Converting to MP4 (high quality)...");
-
-    console.log("[FFmpeg] Writing input file...");
-    // Write webm to FFmpeg virtual filesystem
-    ffmpeg.FS("writeFile", "input.webm", await fetchFile(webmBlob));
-
-    // Re-encode to H.264 MP4 for maximum compatibility
-    const crf = targetResolution === "4k" ? "20" : "18";
-
-    console.log("[FFmpeg] Running conversion...");
-    await ffmpeg.run(
-      "-i", "input.webm",
-      "-c:v", "libx264",
-      "-preset", "ultrafast",
-      "-crf", crf,
-      "-pix_fmt", "yuv420p",
-      "-movflags", "+faststart",
-      "output.mp4"
-    );
-
-    console.log("[FFmpeg] Reading output file...");
-    // Read the output
-    const mp4Data = ffmpeg.FS("readFile", "output.mp4");
-    const mp4Blob = new Blob([mp4Data.buffer], { type: "video/mp4" });
-
-    // Cleanup
-    ffmpeg.FS("unlink", "input.webm");
-    ffmpeg.FS("unlink", "output.mp4");
-
-    console.log("[FFmpeg] Conversion complete!");
-    return mp4Blob;
-  }, []);
-
-  const recordVideo = useCallback(async () => {
+  // Record video using native MediaRecorder (WebM)
+  const recordWebM = useCallback(async () => {
     const canvas = canvasRef.current;
     if (!canvas) {
       alert("Canvas not ready");
       return;
-    }
-
-    // Check if MP4 is selected but FFmpeg isn't loaded
-    if (format === "mp4" && !ffmpegLoaded) {
-      if (ffmpegError) {
-        alert(`MP4 encoder failed to load: ${ffmpegError}\n\nPlease try WebM format instead.`);
-        return;
-      }
-      if (ffmpegLoading) {
-        alert("MP4 encoder is still loading. Please wait.");
-        return;
-      }
-      // Try loading one more time
-      loadAttemptedRef.current = false;
-      await loadFFmpeg();
-      if (!ffmpegRef.current) {
-        alert("MP4 encoder failed to load. Please try WebM format.");
-        return;
-      }
     }
 
     setIsRecording(true);
@@ -177,26 +62,21 @@ export const DownloadButton: React.FC<DownloadButtonProps> = ({ canvasRef }) => 
     chunksRef.current = [];
 
     try {
-      // Get canvas stream
       const stream = canvas.captureStream(fps);
 
-      // Always record as WebM first (browser native)
-      const mimeType = "video/webm;codecs=vp9";
-
-      // Check if mime type is supported
+      // Try VP9 first, fallback to VP8
+      let mimeType = "video/webm;codecs=vp9";
       if (!MediaRecorder.isTypeSupported(mimeType)) {
-        const fallbackMime = "video/webm";
-        if (!MediaRecorder.isTypeSupported(fallbackMime)) {
-          throw new Error("Video recording not supported in this browser");
+        mimeType = "video/webm;codecs=vp8";
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+          mimeType = "video/webm";
         }
       }
 
-      // Higher bitrate for 4K
-      const res = resolutionMap[resolution];
-      const bitrate = res.width >= 3840 ? 35000000 : res.width >= 1920 ? 15000000 : 8000000;
+      const bitrate = qualitySettings[quality].bitrate;
 
       const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: MediaRecorder.isTypeSupported(mimeType) ? mimeType : "video/webm",
+        mimeType,
         videoBitsPerSecond: bitrate,
       });
 
@@ -209,42 +89,10 @@ export const DownloadButton: React.FC<DownloadButtonProps> = ({ canvasRef }) => 
       };
 
       mediaRecorder.onstop = async () => {
-        const webmBlob = new Blob(chunksRef.current, { type: "video/webm" });
-
-        let finalBlob: Blob;
-        let extension: string;
-
-        if (format === "mp4" && ffmpegRef.current) {
-          setIsConverting(true);
-          setProgress(50);
-          setStatusText("Converting to MP4...");
-
-          try {
-            finalBlob = await convertToMp4(webmBlob, resolution);
-            extension = "mp4";
-          } catch (error) {
-            console.error("MP4 conversion failed:", error);
-            setStatusText("MP4 conversion failed, downloading as WebM");
-            finalBlob = webmBlob;
-            extension = "webm";
-          }
-        } else {
-          finalBlob = webmBlob;
-          extension = "webm";
-        }
-
-        // Create download link
-        const url = URL.createObjectURL(finalBlob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `animation-${resolution}-${Date.now()}.${extension}`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        const blob = new Blob(chunksRef.current, { type: "video/webm" });
+        downloadBlob(blob, `animation-${Date.now()}.webm`);
 
         setIsRecording(false);
-        setIsConverting(false);
         setProgress(100);
         setStatusText("Done!");
         setTimeout(() => {
@@ -254,21 +102,18 @@ export const DownloadButton: React.FC<DownloadButtonProps> = ({ canvasRef }) => 
         }, 1000);
       };
 
-      // Start recording
-      mediaRecorder.start(100); // Collect data every 100ms
+      mediaRecorder.start(100);
 
-      // Progress updates (0-50% for recording, 50-100% for conversion if MP4)
+      // Progress updates
       const totalMs = duration * 1000;
       const startTime = Date.now();
-      const maxProgress = format === "mp4" ? 50 : 99;
 
       const progressInterval = setInterval(() => {
         const elapsed = Date.now() - startTime;
-        const pct = Math.min((elapsed / totalMs) * maxProgress, maxProgress);
+        const pct = Math.min((elapsed / totalMs) * 99, 99);
         setProgress(Math.round(pct));
       }, 100);
 
-      // Stop after duration
       setTimeout(() => {
         clearInterval(progressInterval);
         if (mediaRecorder.state === "recording") {
@@ -280,30 +125,151 @@ export const DownloadButton: React.FC<DownloadButtonProps> = ({ canvasRef }) => 
       console.error("Recording error:", error);
       alert(`Recording failed: ${error instanceof Error ? error.message : "Unknown error"}`);
       setIsRecording(false);
-      setIsConverting(false);
       setStatusText("");
     }
-  }, [canvasRef, format, duration, fps, resolution, ffmpegLoaded, ffmpegLoading, ffmpegError, loadFFmpeg, convertToMp4]);
+  }, [canvasRef, duration, fps, quality]);
+
+  // Record GIF by capturing frames
+  const recordGIF = useCallback(async () => {
+    const canvas = canvasRef.current;
+    if (!canvas) {
+      alert("Canvas not ready");
+      return;
+    }
+
+    setIsRecording(true);
+    setProgress(0);
+    setStatusText("Capturing frames...");
+    framesRef.current = [];
+
+    const totalFrames = Math.ceil(duration * fps);
+    const frameInterval = 1000 / fps;
+    let frameCount = 0;
+
+    const captureFrame = () => {
+      if (frameCount >= totalFrames) {
+        // Start processing
+        processGIF();
+        return;
+      }
+
+      try {
+        const dataUrl = canvas.toDataURL("image/png", 0.92);
+        framesRef.current.push(dataUrl);
+        frameCount++;
+        setProgress(Math.round((frameCount / totalFrames) * 50));
+
+        setTimeout(captureFrame, frameInterval);
+      } catch (error) {
+        console.error("Frame capture error:", error);
+        setIsRecording(false);
+        setStatusText("");
+      }
+    };
+
+    const processGIF = async () => {
+      setIsProcessing(true);
+      setStatusText("Creating GIF...");
+
+      try {
+        // Dynamic import of gif.js
+        const GIF = (await import("gif.js")).default;
+
+        const gif = new GIF({
+          workers: 4,
+          quality: quality === "maximum" ? 1 : quality === "high" ? 5 : 10,
+          width: canvas.width,
+          height: canvas.height,
+          workerScript: "/gif.worker.js",
+        });
+
+        // Add frames
+        for (let i = 0; i < framesRef.current.length; i++) {
+          const img = new Image();
+          img.src = framesRef.current[i];
+          await new Promise((resolve) => {
+            img.onload = resolve;
+          });
+          gif.addFrame(img, { delay: frameInterval });
+          setProgress(50 + Math.round((i / framesRef.current.length) * 45));
+        }
+
+        gif.on("finished", (blob: Blob) => {
+          downloadBlob(blob, `animation-${Date.now()}.gif`);
+          setIsRecording(false);
+          setIsProcessing(false);
+          setProgress(100);
+          setStatusText("Done!");
+          setTimeout(() => {
+            setIsOpen(false);
+            setStatusText("");
+            setProgress(0);
+          }, 1000);
+        });
+
+        gif.render();
+      } catch (error) {
+        console.error("GIF processing error:", error);
+        // Fallback: download as PNG sequence zip or just the first frame
+        alert("GIF creation failed. Try WebM format instead.");
+        setIsRecording(false);
+        setIsProcessing(false);
+        setStatusText("");
+      }
+    };
+
+    captureFrame();
+  }, [canvasRef, duration, fps, quality]);
+
+  const downloadBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const startRecording = useCallback(() => {
+    if (format === "webm") {
+      recordWebM();
+    } else {
+      recordGIF();
+    }
+  }, [format, recordWebM, recordGIF]);
 
   const cancelRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
       mediaRecorderRef.current.stop();
     }
     setIsRecording(false);
-    setIsConverting(false);
+    setIsProcessing(false);
     setProgress(0);
     setStatusText("");
   }, []);
 
-  // Reset load attempt when dialog closes
   const handleOpenChange = (open: boolean) => {
     setIsOpen(open);
     if (!open) {
-      loadAttemptedRef.current = false;
-      setFfmpegError(null);
       setStatusText("");
     }
   };
+
+  // Download current frame as PNG
+  const downloadPNG = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const dataUrl = canvas.toDataURL("image/png", 1.0);
+    const a = document.createElement("a");
+    a.href = dataUrl;
+    a.download = `animation-frame-${Date.now()}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }, [canvasRef]);
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
@@ -320,49 +286,57 @@ export const DownloadButton: React.FC<DownloadButtonProps> = ({ canvasRef }) => 
         <DialogHeader>
           <DialogTitle>Export Animation</DialogTitle>
           <DialogDescription className="text-neutral-400">
-            Record and download the animation as a video file.
+            Record and download the animation as a video or image.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
+          {/* Quick PNG Download */}
+          <Button
+            onClick={downloadPNG}
+            variant="outline"
+            className="w-full bg-neutral-800 border-neutral-700 text-neutral-200 hover:bg-neutral-700"
+            disabled={isRecording || isProcessing}
+          >
+            Download Current Frame (PNG)
+          </Button>
+
+          <div className="border-t border-neutral-700 pt-4">
+            <Label className="text-sm text-neutral-300 font-medium">Video Export</Label>
+          </div>
+
           {/* Format Selection */}
           <div className="space-y-2">
             <Label className="text-sm text-neutral-300">Format</Label>
-            <Select value={format} onValueChange={(v) => setFormat(v as VideoFormat)} disabled={isRecording || isConverting}>
+            <Select value={format} onValueChange={(v) => setFormat(v as VideoFormat)} disabled={isRecording || isProcessing}>
               <SelectTrigger className="bg-neutral-800 border-neutral-700 text-neutral-200">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="bg-neutral-800 border-neutral-700">
-                <SelectItem value="mp4" className="text-neutral-200">MP4 (Best Compatibility)</SelectItem>
-                <SelectItem value="webm" className="text-neutral-200">WebM (Faster Export)</SelectItem>
+                <SelectItem value="webm" className="text-neutral-200">WebM (Fast, High Quality)</SelectItem>
+                <SelectItem value="gif" className="text-neutral-200">GIF (Universal, Larger File)</SelectItem>
               </SelectContent>
             </Select>
-            {format === "mp4" && (
-              <p className="text-xs text-amber-400">
-                {ffmpegLoading && "Loading MP4 encoder..."}
-                {ffmpegLoaded && <span className="text-green-400">MP4 encoder ready</span>}
-                {ffmpegError && <span className="text-red-400">Error: {ffmpegError}</span>}
-                {!ffmpegLoading && !ffmpegLoaded && !ffmpegError && "MP4 encoder will load automatically"}
-              </p>
-            )}
+            <p className="text-xs text-neutral-500">
+              {format === "webm"
+                ? "WebM plays on all modern browsers, devices & social media. Best quality-to-size ratio."
+                : "GIF works everywhere but has larger file size and limited colors."}
+            </p>
           </div>
 
-          {/* Resolution Selection */}
+          {/* Quality Selection */}
           <div className="space-y-2">
-            <Label className="text-sm text-neutral-300">Resolution</Label>
-            <Select value={resolution} onValueChange={(v) => setResolution(v as Resolution)} disabled={isRecording || isConverting}>
+            <Label className="text-sm text-neutral-300">Quality</Label>
+            <Select value={quality} onValueChange={(v) => setQuality(v as Quality)} disabled={isRecording || isProcessing}>
               <SelectTrigger className="bg-neutral-800 border-neutral-700 text-neutral-200">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="bg-neutral-800 border-neutral-700">
-                <SelectItem value="720p" className="text-neutral-200">720p (1280×720)</SelectItem>
-                <SelectItem value="1080p" className="text-neutral-200">1080p (1920×1080)</SelectItem>
-                <SelectItem value="4k" className="text-neutral-200">4K (3840×2160)</SelectItem>
+                <SelectItem value="standard" className="text-neutral-200">Standard (Smaller file)</SelectItem>
+                <SelectItem value="high" className="text-neutral-200">High (Recommended)</SelectItem>
+                <SelectItem value="maximum" className="text-neutral-200">Maximum (Best quality)</SelectItem>
               </SelectContent>
             </Select>
-            {resolution === "4k" && (
-              <p className="text-xs text-neutral-400">4K recording may be slow on some devices</p>
-            )}
           </div>
 
           {/* Duration */}
@@ -371,22 +345,23 @@ export const DownloadButton: React.FC<DownloadButtonProps> = ({ canvasRef }) => 
             <Input
               type="number"
               value={duration}
-              onChange={(e) => setDuration(Math.max(1, Math.min(60, parseInt(e.target.value) || 5)))}
+              onChange={(e) => setDuration(Math.max(1, Math.min(30, parseInt(e.target.value) || 5)))}
               min={1}
-              max={60}
-              disabled={isRecording || isConverting}
+              max={30}
+              disabled={isRecording || isProcessing}
               className="bg-neutral-800 border-neutral-700 text-neutral-200"
             />
           </div>
 
           {/* FPS */}
           <div className="space-y-2">
-            <Label className="text-sm text-neutral-300">Frame Rate (FPS)</Label>
-            <Select value={fps.toString()} onValueChange={(v) => setFps(parseInt(v))} disabled={isRecording || isConverting}>
+            <Label className="text-sm text-neutral-300">Frame Rate</Label>
+            <Select value={fps.toString()} onValueChange={(v) => setFps(parseInt(v))} disabled={isRecording || isProcessing}>
               <SelectTrigger className="bg-neutral-800 border-neutral-700 text-neutral-200">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="bg-neutral-800 border-neutral-700">
+                <SelectItem value="24" className="text-neutral-200">24 FPS (Cinematic)</SelectItem>
                 <SelectItem value="30" className="text-neutral-200">30 FPS (Standard)</SelectItem>
                 <SelectItem value="60" className="text-neutral-200">60 FPS (Smooth)</SelectItem>
               </SelectContent>
@@ -394,48 +369,43 @@ export const DownloadButton: React.FC<DownloadButtonProps> = ({ canvasRef }) => 
           </div>
 
           {/* Progress Bar */}
-          {(isRecording || isConverting || (ffmpegLoading && format === "mp4")) && (
+          {(isRecording || isProcessing) && (
             <div className="space-y-2">
               <Label className="text-sm text-neutral-300">
-                {statusText || "Processing..."} {!ffmpegLoading && `${progress}%`}
+                {statusText || "Processing..."} {progress}%
               </Label>
-              {!ffmpegLoading && (
-                <div className="w-full bg-neutral-700 rounded-full h-2">
-                  <div
-                    className="bg-cyan-500 h-2 rounded-full transition-all duration-200"
-                    style={{ width: `${progress}%` }}
-                  />
-                </div>
-              )}
+              <div className="w-full bg-neutral-700 rounded-full h-2">
+                <div
+                  className="bg-cyan-500 h-2 rounded-full transition-all duration-200"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
             </div>
           )}
 
           {/* Action Buttons */}
           <div className="flex gap-2 pt-2">
-            {!isRecording && !isConverting ? (
+            {!isRecording && !isProcessing ? (
               <Button
-                onClick={recordVideo}
+                onClick={startRecording}
                 className="flex-1 bg-cyan-600 hover:bg-cyan-700 text-white"
-                disabled={(format === "mp4" && ffmpegLoading) || (format === "mp4" && !!ffmpegError)}
               >
-                {format === "mp4" && ffmpegLoading ? "Loading Encoder..." : "Start Recording"}
+                Start Recording
               </Button>
             ) : (
               <Button
                 onClick={cancelRecording}
                 variant="destructive"
                 className="flex-1"
-                disabled={isConverting}
+                disabled={isProcessing}
               >
-                {isConverting ? "Converting..." : "Cancel"}
+                {isProcessing ? "Processing..." : "Cancel"}
               </Button>
             )}
           </div>
 
           <p className="text-xs text-neutral-500 text-center">
-            {format === "mp4"
-              ? "Records in high quality, then converts to MP4. Keep tab active."
-              : "The animation will be recorded in real-time. Keep this tab active."}
+            Recording happens in real-time. Keep this tab active and visible.
           </p>
         </div>
       </DialogContent>
