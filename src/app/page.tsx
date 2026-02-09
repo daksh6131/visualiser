@@ -20,6 +20,7 @@ import { WaveCanvas, WaveCanvasHandle } from "@/components/WaveCanvas";
 import { AsciiCanvas, AsciiCanvasHandle } from "@/components/AsciiCanvas";
 import { IsometricCanvas, IsometricCanvasHandle } from "@/components/IsometricCanvas";
 import { DownloadButton } from "@/components/DownloadButton";
+import { TextOverlay, TextItem, createDefaultTextItem, TextOverlayHandle } from "@/components/TextOverlay";
 
 // Design state interface for save/load
 interface DesignState {
@@ -259,6 +260,17 @@ type AnimationType = "wavefield" | "ascii" | "tunnel" | "shader" | "isometric";
 export default function Home() {
   const [type, setType] = useState<AnimationType>("shader");
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showTextPanel, setShowTextPanel] = useState(false);
+
+  // Canvas dimensions
+  const [canvasWidth, setCanvasWidth] = useState(1920);
+  const [canvasHeight, setCanvasHeight] = useState(1080);
+  const [aspectRatio, setAspectRatio] = useState<"16:9" | "9:16" | "1:1" | "4:3" | "custom">("16:9");
+
+  // Text overlay
+  const [textItems, setTextItems] = useState<TextItem[]>([]);
+  const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
+  const textOverlayRef = useRef<TextOverlayHandle>(null);
 
   // Canvas refs for video recording
   const shaderCanvasRef = useRef<ShaderCanvasHandle>(null);
@@ -266,6 +278,7 @@ export default function Home() {
   const waveCanvasRef = useRef<WaveCanvasHandle>(null);
   const asciiCanvasRef = useRef<AsciiCanvasHandle>(null);
   const isometricCanvasRef = useRef<IsometricCanvasHandle>(null);
+  const compositeCanvasRef = useRef<HTMLCanvasElement>(null);
 
   // Get the currently active canvas element
   const getActiveCanvas = useCallback(() => {
@@ -299,6 +312,85 @@ export default function Home() {
     const timer = setTimeout(updateActiveCanvasRef, 100);
     return () => clearTimeout(timer);
   }, [type, updateActiveCanvasRef]);
+
+  // Handle aspect ratio changes
+  const handleAspectRatioChange = useCallback((ratio: "16:9" | "9:16" | "1:1" | "4:3" | "custom") => {
+    setAspectRatio(ratio);
+    if (ratio !== "custom") {
+      const ratios: Record<string, { w: number; h: number }> = {
+        "16:9": { w: 1920, h: 1080 },
+        "9:16": { w: 1080, h: 1920 },
+        "1:1": { w: 1080, h: 1080 },
+        "4:3": { w: 1440, h: 1080 },
+      };
+      setCanvasWidth(ratios[ratio].w);
+      setCanvasHeight(ratios[ratio].h);
+    }
+  }, []);
+
+  // Text management functions
+  const addTextItem = useCallback(() => {
+    const id = `text-${Date.now()}`;
+    const newItem = createDefaultTextItem(id);
+    setTextItems(prev => [...prev, newItem]);
+    setSelectedTextId(id);
+  }, []);
+
+  const updateTextItem = useCallback((id: string, updates: Partial<TextItem>) => {
+    setTextItems(prev => prev.map(item =>
+      item.id === id ? { ...item, ...updates } : item
+    ));
+  }, []);
+
+  const deleteTextItem = useCallback((id: string) => {
+    setTextItems(prev => prev.filter(item => item.id !== id));
+    if (selectedTextId === id) {
+      setSelectedTextId(null);
+    }
+  }, [selectedTextId]);
+
+  const duplicateTextItem = useCallback((id: string) => {
+    const item = textItems.find(t => t.id === id);
+    if (item) {
+      const newId = `text-${Date.now()}`;
+      const newItem: TextItem = { ...item, id: newId, x: item.x + 5, y: item.y + 5 };
+      setTextItems(prev => [...prev, newItem]);
+      setSelectedTextId(newId);
+    }
+  }, [textItems]);
+
+  // Get selected text item
+  const selectedTextItem = textItems.find(t => t.id === selectedTextId);
+
+  // Composite canvas for recording (combines animation + text overlay)
+  useEffect(() => {
+    if (!compositeCanvasRef.current) return;
+
+    const compositeCanvas = compositeCanvasRef.current;
+    const ctx = compositeCanvas.getContext("2d");
+    if (!ctx) return;
+
+    const renderComposite = () => {
+      ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+
+      // Draw the animation canvas
+      const animCanvas = getActiveCanvas();
+      if (animCanvas) {
+        ctx.drawImage(animCanvas, 0, 0, canvasWidth, canvasHeight);
+      }
+
+      // Draw the text overlay
+      const textCanvas = textOverlayRef.current?.getCanvas();
+      if (textCanvas) {
+        ctx.drawImage(textCanvas, 0, 0, canvasWidth, canvasHeight);
+      }
+
+      requestAnimationFrame(renderComposite);
+    };
+
+    const animId = requestAnimationFrame(renderComposite);
+    return () => cancelAnimationFrame(animId);
+  }, [canvasWidth, canvasHeight, getActiveCanvas]);
 
   // Shared
   const [seed, setSeed] = useState(42);
@@ -746,8 +838,24 @@ export default function Home() {
   return (
     <div className="h-screen w-screen bg-neutral-950 flex flex-col overflow-hidden">
       {/* Video Player */}
-      <div className="flex-1 relative min-h-0">
-        <div className="absolute inset-0">
+      <div className="flex-1 relative min-h-0 flex items-center justify-center bg-neutral-950">
+        <div
+          className="relative"
+          style={{
+            width: "100%",
+            height: "100%",
+            maxWidth: `min(100%, ${canvasWidth}px)`,
+            maxHeight: `min(100%, ${canvasHeight}px)`,
+            aspectRatio: `${canvasWidth} / ${canvasHeight}`,
+          }}
+        >
+          {/* Composite canvas for recording */}
+          <canvas
+            ref={compositeCanvasRef}
+            width={canvasWidth}
+            height={canvasHeight}
+            className="hidden"
+          />
           {type === "ascii" && (
             <AsciiCanvas
               ref={asciiCanvasRef}
@@ -864,6 +972,13 @@ export default function Home() {
               seed={seed}
             />
           )}
+          {/* Text Overlay */}
+          <TextOverlay
+            ref={textOverlayRef}
+            items={textItems}
+            width={canvasWidth}
+            height={canvasHeight}
+          />
         </div>
       </div>
 
@@ -1117,6 +1232,54 @@ export default function Home() {
             <div className="flex-1" />
 
             {/* Action Buttons */}
+            {/* Canvas Size */}
+            <div className="flex items-center gap-2">
+              <Label className="text-sm text-neutral-400">Size</Label>
+              <Select value={aspectRatio} onValueChange={(v) => handleAspectRatioChange(v as any)}>
+                <SelectTrigger className="w-24 h-9 text-sm bg-neutral-800 border-neutral-700 text-neutral-200">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-neutral-800 border-neutral-700">
+                  <SelectItem value="16:9" className="text-sm text-neutral-200">16:9</SelectItem>
+                  <SelectItem value="9:16" className="text-sm text-neutral-200">9:16</SelectItem>
+                  <SelectItem value="1:1" className="text-sm text-neutral-200">1:1</SelectItem>
+                  <SelectItem value="4:3" className="text-sm text-neutral-200">4:3</SelectItem>
+                  <SelectItem value="custom" className="text-sm text-neutral-200">Custom</SelectItem>
+                </SelectContent>
+              </Select>
+              {aspectRatio === "custom" && (
+                <div className="flex items-center gap-1">
+                  <Input
+                    type="number"
+                    value={canvasWidth}
+                    onChange={(e) => setCanvasWidth(Math.max(100, parseInt(e.target.value) || 1920))}
+                    className="h-9 w-20 text-xs bg-neutral-800 border-neutral-700 text-neutral-200 px-2"
+                    placeholder="W"
+                  />
+                  <span className="text-neutral-500">×</span>
+                  <Input
+                    type="number"
+                    value={canvasHeight}
+                    onChange={(e) => setCanvasHeight(Math.max(100, parseInt(e.target.value) || 1080))}
+                    className="h-9 w-20 text-xs bg-neutral-800 border-neutral-700 text-neutral-200 px-2"
+                    placeholder="H"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="h-6 w-px bg-neutral-700" />
+
+            <Button
+              onClick={() => setShowTextPanel(!showTextPanel)}
+              variant="outline"
+              size="sm"
+              className={`text-sm border-neutral-700 hover:bg-neutral-700 hover:text-white ${
+                showTextPanel ? "bg-neutral-700 text-white" : "bg-neutral-800 text-neutral-300"
+              }`}
+            >
+              Text
+            </Button>
             <Button
               onClick={() => setShowAdvanced(!showAdvanced)}
               variant="outline"
@@ -1140,7 +1303,7 @@ export default function Home() {
             >
               {linkCopied ? "Copied!" : "Share"}
             </Button>
-            <DownloadButton canvasRef={activeCanvasRef} />
+            <DownloadButton canvasRef={textItems.length > 0 ? compositeCanvasRef : activeCanvasRef} />
           </div>
         </div>
 
@@ -1898,6 +2061,322 @@ export default function Home() {
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Text Panel */}
+        {showTextPanel && (
+          <div className="px-4 py-4 border-t border-neutral-800 max-h-72 overflow-y-auto">
+            <div className="max-w-5xl mx-auto">
+              <div className="flex items-center justify-between mb-4">
+                <Label className="text-sm text-neutral-300 font-medium">Text Overlays</Label>
+                <Button
+                  onClick={addTextItem}
+                  size="sm"
+                  className="text-xs bg-cyan-600 hover:bg-cyan-700 text-white"
+                >
+                  + Add Text
+                </Button>
+              </div>
+
+              {textItems.length === 0 ? (
+                <p className="text-xs text-neutral-500 text-center py-4">
+                  No text overlays yet. Click &quot;Add Text&quot; to create one.
+                </p>
+              ) : (
+                <div className="flex gap-4">
+                  {/* Text list */}
+                  <div className="w-48 space-y-2">
+                    {textItems.map((item) => (
+                      <div
+                        key={item.id}
+                        onClick={() => setSelectedTextId(item.id)}
+                        className={`p-2 rounded cursor-pointer text-xs truncate ${
+                          selectedTextId === item.id
+                            ? "bg-neutral-700 text-white"
+                            : "bg-neutral-800 text-neutral-300 hover:bg-neutral-700"
+                        }`}
+                      >
+                        {item.text || "Empty text"}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Text editor */}
+                  {selectedTextItem && (
+                    <div className="flex-1 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                      {/* Text content */}
+                      <div className="col-span-2 space-y-2">
+                        <Label className="text-xs text-neutral-400">Text</Label>
+                        <Input
+                          value={selectedTextItem.text}
+                          onChange={(e) => updateTextItem(selectedTextItem.id, { text: e.target.value })}
+                          placeholder="Enter text..."
+                          className="h-8 text-xs bg-neutral-800 border-neutral-700 text-neutral-200"
+                        />
+                      </div>
+
+                      {/* Position X */}
+                      <SliderWithInput
+                        label="X Position %"
+                        value={selectedTextItem.x}
+                        onChange={(v) => updateTextItem(selectedTextItem.id, { x: v })}
+                        min={0}
+                        max={100}
+                        step={1}
+                        decimals={0}
+                      />
+
+                      {/* Position Y */}
+                      <SliderWithInput
+                        label="Y Position %"
+                        value={selectedTextItem.y}
+                        onChange={(v) => updateTextItem(selectedTextItem.id, { y: v })}
+                        min={0}
+                        max={100}
+                        step={1}
+                        decimals={0}
+                      />
+
+                      {/* Font Size */}
+                      <SliderWithInput
+                        label="Font Size"
+                        value={selectedTextItem.fontSize}
+                        onChange={(v) => updateTextItem(selectedTextItem.id, { fontSize: v })}
+                        min={12}
+                        max={200}
+                        step={1}
+                        decimals={0}
+                      />
+
+                      {/* Font Family */}
+                      <div className="space-y-2">
+                        <Label className="text-xs text-neutral-400">Font</Label>
+                        <Select
+                          value={selectedTextItem.fontFamily}
+                          onValueChange={(v) => updateTextItem(selectedTextItem.id, { fontFamily: v })}
+                        >
+                          <SelectTrigger className="h-8 text-xs bg-neutral-800 border-neutral-700 text-neutral-200">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="bg-neutral-800 border-neutral-700">
+                            <SelectItem value="sans-serif" className="text-xs text-neutral-200">Sans Serif</SelectItem>
+                            <SelectItem value="serif" className="text-xs text-neutral-200">Serif</SelectItem>
+                            <SelectItem value="mono" className="text-xs text-neutral-200">Mono</SelectItem>
+                            <SelectItem value="display" className="text-xs text-neutral-200">Display</SelectItem>
+                            <SelectItem value="handwriting" className="text-xs text-neutral-200">Handwriting</SelectItem>
+                            <SelectItem value="condensed" className="text-xs text-neutral-200">Condensed</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Font Weight */}
+                      <SliderWithInput
+                        label="Weight"
+                        value={selectedTextItem.fontWeight}
+                        onChange={(v) => updateTextItem(selectedTextItem.id, { fontWeight: v })}
+                        min={100}
+                        max={900}
+                        step={100}
+                        decimals={0}
+                      />
+
+                      {/* Color */}
+                      <div className="space-y-2">
+                        <Label className="text-xs text-neutral-400">Color</Label>
+                        <Input
+                          type="color"
+                          value={selectedTextItem.color}
+                          onChange={(e) => updateTextItem(selectedTextItem.id, { color: e.target.value })}
+                          className="h-8 w-full p-1 bg-neutral-800 border-neutral-700"
+                        />
+                      </div>
+
+                      {/* Opacity */}
+                      <SliderWithInput
+                        label="Opacity"
+                        value={selectedTextItem.opacity}
+                        onChange={(v) => updateTextItem(selectedTextItem.id, { opacity: v })}
+                        min={0}
+                        max={1}
+                        step={0.05}
+                        decimals={2}
+                      />
+
+                      {/* Rotation */}
+                      <SliderWithInput
+                        label="Rotation"
+                        value={selectedTextItem.rotation}
+                        onChange={(v) => updateTextItem(selectedTextItem.id, { rotation: v })}
+                        min={-180}
+                        max={180}
+                        step={1}
+                        decimals={0}
+                      />
+
+                      {/* Text Align */}
+                      <div className="space-y-2">
+                        <Label className="text-xs text-neutral-400">Align</Label>
+                        <Select
+                          value={selectedTextItem.textAlign}
+                          onValueChange={(v) => updateTextItem(selectedTextItem.id, { textAlign: v as any })}
+                        >
+                          <SelectTrigger className="h-8 text-xs bg-neutral-800 border-neutral-700 text-neutral-200">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="bg-neutral-800 border-neutral-700">
+                            <SelectItem value="left" className="text-xs text-neutral-200">Left</SelectItem>
+                            <SelectItem value="center" className="text-xs text-neutral-200">Center</SelectItem>
+                            <SelectItem value="right" className="text-xs text-neutral-200">Right</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Shadow toggle */}
+                      <div className="space-y-2">
+                        <Label className="text-xs text-neutral-400">Shadow</Label>
+                        <div className="flex items-center h-8">
+                          <input
+                            type="checkbox"
+                            checked={selectedTextItem.shadow}
+                            onChange={(e) => updateTextItem(selectedTextItem.id, { shadow: e.target.checked })}
+                            className="rounded border-neutral-700 h-4 w-4"
+                          />
+                        </div>
+                      </div>
+
+                      {selectedTextItem.shadow && (
+                        <>
+                          <div className="space-y-2">
+                            <Label className="text-xs text-neutral-400">Shadow Color</Label>
+                            <Input
+                              type="color"
+                              value={selectedTextItem.shadowColor.startsWith("rgba") ? "#000000" : selectedTextItem.shadowColor}
+                              onChange={(e) => updateTextItem(selectedTextItem.id, { shadowColor: e.target.value })}
+                              className="h-8 w-full p-1 bg-neutral-800 border-neutral-700"
+                            />
+                          </div>
+                          <SliderWithInput
+                            label="Shadow Blur"
+                            value={selectedTextItem.shadowBlur}
+                            onChange={(v) => updateTextItem(selectedTextItem.id, { shadowBlur: v })}
+                            min={0}
+                            max={50}
+                            step={1}
+                            decimals={0}
+                          />
+                        </>
+                      )}
+
+                      {/* Stroke toggle */}
+                      <div className="space-y-2">
+                        <Label className="text-xs text-neutral-400">Stroke</Label>
+                        <div className="flex items-center h-8">
+                          <input
+                            type="checkbox"
+                            checked={selectedTextItem.stroke}
+                            onChange={(e) => updateTextItem(selectedTextItem.id, { stroke: e.target.checked })}
+                            className="rounded border-neutral-700 h-4 w-4"
+                          />
+                        </div>
+                      </div>
+
+                      {selectedTextItem.stroke && (
+                        <>
+                          <div className="space-y-2">
+                            <Label className="text-xs text-neutral-400">Stroke Color</Label>
+                            <Input
+                              type="color"
+                              value={selectedTextItem.strokeColor}
+                              onChange={(e) => updateTextItem(selectedTextItem.id, { strokeColor: e.target.value })}
+                              className="h-8 w-full p-1 bg-neutral-800 border-neutral-700"
+                            />
+                          </div>
+                          <SliderWithInput
+                            label="Stroke Width"
+                            value={selectedTextItem.strokeWidth}
+                            onChange={(v) => updateTextItem(selectedTextItem.id, { strokeWidth: v })}
+                            min={1}
+                            max={10}
+                            step={0.5}
+                          />
+                        </>
+                      )}
+
+                      {/* Animation */}
+                      <div className="col-span-2 md:col-span-4 lg:col-span-6 border-t border-neutral-700 pt-3 mt-2">
+                        <Label className="text-xs text-neutral-300 font-medium">Animation</Label>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label className="text-xs text-neutral-400">Animate</Label>
+                        <div className="flex items-center h-8">
+                          <input
+                            type="checkbox"
+                            checked={selectedTextItem.animate}
+                            onChange={(e) => updateTextItem(selectedTextItem.id, { animate: e.target.checked })}
+                            className="rounded border-neutral-700 h-4 w-4"
+                          />
+                        </div>
+                      </div>
+
+                      {selectedTextItem.animate && (
+                        <>
+                          <div className="space-y-2">
+                            <Label className="text-xs text-neutral-400">Type</Label>
+                            <Select
+                              value={selectedTextItem.animationType}
+                              onValueChange={(v) => updateTextItem(selectedTextItem.id, { animationType: v as any })}
+                            >
+                              <SelectTrigger className="h-8 text-xs bg-neutral-800 border-neutral-700 text-neutral-200">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="bg-neutral-800 border-neutral-700">
+                                <SelectItem value="none" className="text-xs text-neutral-200">None</SelectItem>
+                                <SelectItem value="pulse" className="text-xs text-neutral-200">Pulse</SelectItem>
+                                <SelectItem value="bounce" className="text-xs text-neutral-200">Bounce</SelectItem>
+                                <SelectItem value="shake" className="text-xs text-neutral-200">Shake</SelectItem>
+                                <SelectItem value="glow" className="text-xs text-neutral-200">Glow</SelectItem>
+                                <SelectItem value="wave" className="text-xs text-neutral-200">Wave</SelectItem>
+                                <SelectItem value="typewriter" className="text-xs text-neutral-200">Typewriter</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <SliderWithInput
+                            label="Anim Speed"
+                            value={selectedTextItem.animationSpeed}
+                            onChange={(v) => updateTextItem(selectedTextItem.id, { animationSpeed: v })}
+                            min={0.1}
+                            max={3}
+                            step={0.1}
+                          />
+                        </>
+                      )}
+
+                      {/* Actions */}
+                      <div className="col-span-2 md:col-span-4 lg:col-span-6 flex gap-2 mt-2">
+                        <Button
+                          onClick={() => duplicateTextItem(selectedTextItem.id)}
+                          size="sm"
+                          variant="outline"
+                          className="text-xs bg-neutral-800 border-neutral-700 text-neutral-300 hover:bg-neutral-700"
+                        >
+                          Duplicate
+                        </Button>
+                        <Button
+                          onClick={() => deleteTextItem(selectedTextItem.id)}
+                          size="sm"
+                          variant="outline"
+                          className="text-xs bg-red-900/50 border-red-700 text-red-300 hover:bg-red-900"
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}
