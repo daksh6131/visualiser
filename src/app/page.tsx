@@ -838,14 +838,13 @@ export default function Home() {
   return (
     <div className="h-screen w-screen bg-neutral-950 flex flex-row overflow-hidden">
       {/* Canvas Area */}
-      <div className="flex-1 min-w-0 relative flex items-center justify-center bg-neutral-950 p-4">
+      <div className="flex-1 min-w-0 relative flex items-center justify-center bg-neutral-950 p-8">
         <div
-          className="relative"
+          className="relative rounded-lg overflow-hidden shadow-2xl"
           style={{
+            maxWidth: `${canvasWidth}px`,
+            maxHeight: `${canvasHeight}px`,
             width: "100%",
-            height: "100%",
-            maxWidth: `min(100%, ${canvasWidth}px)`,
-            maxHeight: `min(100%, ${canvasHeight}px)`,
             aspectRatio: `${canvasWidth} / ${canvasHeight}`,
           }}
         >
